@@ -1,4 +1,6 @@
 # Smart contracts
+one contract per folder with its own Cargo.toml
+
 ## Peg
 - OriginalTokenVault
 - PeggedTokenBridge
