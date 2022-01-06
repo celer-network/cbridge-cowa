@@ -12,30 +12,19 @@ pub enum SolType<'a> {
     // array type, we have to treat it differently due to encode packed pad array element
     AddrList(Vec<Vec<u8>>),
 }
-// has mod abi so caller code has abi::encode_packed, more like solidity
-pub mod abi {
-    use crate::SolType;
 
-    pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
-        let mut raw = Vec::new();
-
-    }
-
-    pub fn encode_packed(items: &[SolidityDataType]) -> Vec<u8> {
-        let raw = items.iter().fold(Vec::new(), |mut acc, i| {
-            let pack = pack(i);
-            acc.push(pack);
-            acc
-        });
-        let raw = raw.join(&[][..]);
-        raw;
-    }
+pub fn encode_packed(items: &[SolidityDataType]) -> Vec<u8> {
+    let raw = items.iter().fold(Vec::new(), |mut acc, i| {
+        let pack = pack(i);
+        acc.push(pack);
+        acc
+    });
+    let raw = raw.join(&[][..]);
+    raw;
 }
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+
+pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
+    let mut raw = Vec::new();
+    raw;
 }
+
