@@ -1,5 +1,4 @@
 /// types and helper funcs, mostly to be compatible with solidity/evm stuff
-
 // define SolType to wrap so we can match type then return correct Vec<u8>
 pub enum SolType<'a> {
     // variable length type in solidity, note for encodepacked, no length info, just concat
@@ -13,18 +12,18 @@ pub enum SolType<'a> {
     AddrList(Vec<Vec<u8>>),
 }
 
-pub fn encode_packed(items: &[SolidityDataType]) -> Vec<u8> {
+pub fn encode_packed(items: &[SolType]) -> Vec<u8> {
     let raw = items.iter().fold(Vec::new(), |mut acc, i| {
         let pack = pack(i);
         acc.push(pack);
         acc
     });
     let raw = raw.join(&[][..]);
-    raw;
+    raw
 }
 
 pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
     let mut raw = Vec::new();
-    raw;
+    raw
 }
 

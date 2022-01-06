@@ -9,4 +9,4 @@ one contract per folder with its own Cargo.toml
 ## Pool-based
 - Bridge
 
-Unlike solidity, contracts here are actual contracts that can be deployed. Libraries/helper contracts should be put in packages folder per CosmWasm convention
+Unlike solidity, contracts here are actual contracts that can be deployed. Libraries/helper contracts should be put in utils folder per CosmWasm convention
