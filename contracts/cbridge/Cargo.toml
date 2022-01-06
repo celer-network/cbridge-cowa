@@ -1,5 +1,5 @@
 [package]
-name = "{{project-name}}"
+name = "cbridge"
 version = "0.1.0"
 authors = ["Celer Network"]
 edition = "2018"
