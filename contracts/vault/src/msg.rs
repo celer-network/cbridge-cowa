@@ -1,3 +1,4 @@
+use cosmwasm_std as cwstd;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +12,17 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     Increment {},
     Reset { count: i32 },
+    // to be called by cw20 token contract for user deposit
+    // Cw20ReceiveMsg.msg is Deposit
+    Receive(cw20::Cw20ReceiveMsg),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct DepositMsg { // user call cw20.send with this msg
+    pub dst_chid: u64,
+    pub mint_acnt: cwstd::Addr,
+    pub nonce: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
