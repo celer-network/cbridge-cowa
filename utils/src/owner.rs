@@ -1,14 +1,7 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use cosmwasm_std::{attr, Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult};
 use cw_storage_plus::Item;
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct OwnerResponse {
-    pub owner: Option<String>,
-}
 
 /// Errors returned from Owner
 #[derive(Error, Debug, PartialEq)]
@@ -21,7 +14,7 @@ pub enum OwnerError {
 }
 
 // state/logic
-pub struct Owner<'a>(Item<'a, Option<Addr>>);
+pub struct Owner<'a>(Item<'a, String>);
 
 // this is the core business logic we expose
 impl<'a> Owner<'a> {
@@ -29,59 +22,61 @@ impl<'a> Owner<'a> {
         Owner(Item::new(namespace))
     }
 
-    pub fn set(&self, deps: DepsMut, owner: Option<Addr>) -> StdResult<()> {
-        self.0.save(deps.storage, &owner)
-    }
-
-    pub fn get(&self, deps: Deps) -> StdResult<Option<Addr>> {
-        self.0.load(deps.storage)
-    }
-
-    /// Returns Ok(true) if this is an owner, Ok(false) if not and an Error if
-    /// we hit an error with Api or Storage usage
-    pub fn is_owner(&self, deps: Deps, caller: &Addr) -> StdResult<bool> {
-        match self.0.load(deps.storage)? {
-            Some(owner) => Ok(caller == &owner),
-            None => Ok(false),
+    /// only allow set once. if already has owner, fail. owner should be info.sender
+    pub fn init_set(&self, deps: DepsMut, owner: &Addr) -> StdResult<()> {
+        // storage has way to check if a key exists but it's hidden by Item.
+        match self.0.may_load(deps.storage)? {
+            // not found, ok to set
+            None => self.0.save(deps.storage, &owner.clone().into_string()),
+            // found string, return error
+            Some(_) => Err(StdError::generic_err("init_set called after owner already set")),
         }
     }
 
-    /// Like is_owner but returns OwnerError::NotOwner if not owner.
-    /// Helper for a nice one-line auth check.
-    pub fn assert_owner(&self, deps: Deps, caller: &Addr) -> Result<(), OwnerError> {
-        if !self.is_owner(deps, caller)? {
+    /// return owner string. if not set, error
+    pub fn get(&self, deps: Deps) -> StdResult<String> {
+        self.0.load(deps.storage)
+    }
+
+    /// returns OwnerError::NotOwner if info.sender is not owner. we take info to avoid anyone
+    /// pass in wrong Addr eg. from user msg
+    pub fn assert_owner(&self, deps: Deps, info: &MessageInfo) -> Result<(), OwnerError> {
+        if !self.is_owner(deps, &info.sender)? {
             Err(OwnerError::NotOwner {})
         } else {
             Ok(())
         }
     }
 
-    pub fn execute_update_owner(
+    /// Returns Ok(true) if this is an owner, Ok(false) if not and an Error if
+    /// we hit an error with Api or Storage usage. you should use assert_owner
+    pub fn is_owner(&self, deps: Deps, caller: &Addr) -> StdResult<bool> {
+        Ok(self.0.load(deps.storage)? == caller.clone().into_string())
+    }
+
+    /// set a new owner, must be called by current owner, we check new_owner is valid Addr
+    /// to avoid any mistake eg. set to an ETH address
+    pub fn update_owner(
         &self,
         deps: DepsMut,
         info: MessageInfo,
-        new_owner: Option<Addr>,
+        new_owner: &str,
     ) -> Result<Response, OwnerError> {
-        self.assert_owner(deps.as_ref(), &info.sender)?;
+        // make sure caller is current owner
+        self.assert_owner(deps.as_ref(), &info)?;
 
-        let owner_str = match new_owner.as_ref() {
-            Some(owner) => owner.to_string(),
-            None => "None".to_string(),
-        };
-        let attributes = vec![
-            attr("action", "update_owner"),
-            attr("owner", owner_str),
-            attr("sender", info.sender),
-        ];
+        // check if new_owner is valid Addr
+        let valid_addr = deps.api.addr_validate(new_owner)?;
 
-        self.set(deps, new_owner)?;
+        // write to storage
+        self.0.save(deps.storage, &valid_addr.to_string())?;
 
-        Ok(Response::new().add_attributes(attributes))
-    }
-
-    pub fn query_owner(&self, deps: Deps) -> StdResult<OwnerResponse> {
-        let owner = self.get(deps)?.map(String::from);
-        Ok(OwnerResponse { owner })
+        // return and emit event
+        let res = Response::new()
+            .add_attribute("action", "update_owner")
+            .add_attribute("owner", new_owner)
+            .add_attribute("sender", info.sender);
+        Ok(res)
     }
 }
 
@@ -92,80 +87,58 @@ mod tests {
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
 
     #[test]
-    fn set_and_get_owner() {
+    fn init_set() {
         let mut deps = mock_dependencies(&[]);
-        let control = Owner::new("foo");
+        let obj = Owner::new("owner");
+        
+        let owner_addr = Addr::unchecked("owner_addr");
+        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
 
-        // initialize and check
-        let owner = Some(Addr::unchecked("owner"));
-        control.set(deps.as_mut(), owner.clone()).unwrap();
-        let got = control.get(deps.as_ref()).unwrap();
-        assert_eq!(owner, got);
-
-        // clear it and check
-        control.set(deps.as_mut(), None).unwrap();
-        let got = control.get(deps.as_ref()).unwrap();
-        assert_eq!(None, got);
+        let got = obj.get(deps.as_ref()).unwrap();
+        assert_eq!(got, "owner_addr");
+        // try to call init_set again will cause err
+        let err = obj.init_set(deps.as_mut(), &owner_addr).unwrap_err();
+        assert_eq!(err, StdError::generic_err("init_set called after owner already set"));
     }
 
     #[test]
-    fn owner_checks() {
+    fn assert_owner() {
         let mut deps = mock_dependencies(&[]);
+        let obj = Owner::new("owner");
+        
+        let owner_addr = Addr::unchecked("owner_addr");
+        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
 
-        let control = Owner::new("foo");
-        let owner = Addr::unchecked("big boss");
-        let imposter = Addr::unchecked("imposter");
-
-        // ensure checks proper with owner set
-        control.set(deps.as_mut(), Some(owner.clone())).unwrap();
-        assert!(control.is_owner(deps.as_ref(), &owner).unwrap());
-        assert!(!(control.is_owner(deps.as_ref(), &imposter).unwrap()));
-        control.assert_owner(deps.as_ref(), &owner).unwrap();
-        let err = control.assert_owner(deps.as_ref(), &imposter).unwrap_err();
-        assert_eq!(OwnerError::NotOwner {}, err);
-
-        // ensure checks proper with owner None
-        control.set(deps.as_mut(), None).unwrap();
-        assert!(!(control.is_owner(deps.as_ref(), &owner).unwrap()));
-        assert!(!(control.is_owner(deps.as_ref(), &imposter).unwrap()));
-        let err = control.assert_owner(deps.as_ref(), &owner).unwrap_err();
-        assert_eq!(OwnerError::NotOwner {}, err);
-        let err = control.assert_owner(deps.as_ref(), &imposter).unwrap_err();
-        assert_eq!(OwnerError::NotOwner {}, err);
+        let info = mock_info(owner_addr.as_ref(), &[]);
+        // must Ok
+        obj.assert_owner(deps.as_ref(), &info).unwrap();
+        let info = mock_info("not_owner_addr", &[]);
+        // must err
+        let err = obj.assert_owner(deps.as_ref(), &info).unwrap_err();
+        assert_eq!(err, OwnerError::NotOwner {}); 
     }
 
     #[test]
-    fn test_execute_query() {
+    fn update_owner() {
         let mut deps = mock_dependencies(&[]);
+        let obj = Owner::new("owner");
+        
+        let owner_addr = Addr::unchecked("owner_addr");
+        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
 
-        // initial setup
-        let control = Owner::new("foo");
-        let owner = Addr::unchecked("big boss");
-        let imposter = Addr::unchecked("imposter");
-        let friend = Addr::unchecked("buddy");
-        control.set(deps.as_mut(), Some(owner.clone())).unwrap();
+        let info = mock_info(owner_addr.as_ref(), &[]);
+        // must Ok
+        obj.update_owner(deps.as_mut(), info, "new_owner_addr").unwrap();
+        let got = obj.get(deps.as_ref()).unwrap();
+        assert_eq!(got, "new_owner_addr");
 
-        // query shows results
-        let res = control.query_owner(deps.as_ref()).unwrap();
-        assert_eq!(Some(owner.to_string()), res.owner);
+        let info = mock_info("new_owner_addr", &[]);
+        // must Ok for new owner
+        obj.assert_owner(deps.as_ref(), &info).unwrap();
 
-        // imposter cannot update
-        let info = mock_info(imposter.as_ref(), &[]);
-        let new_owner = Some(friend.clone());
-        let err = control
-            .execute_update_owner(deps.as_mut(), info, new_owner.clone())
-            .unwrap_err();
-        assert_eq!(OwnerError::NotOwner {}, err);
-
-        // owner can update
-        let info = mock_info(owner.as_ref(), &[]);
-        let res = control
-            .execute_update_owner(deps.as_mut(), info, new_owner)
-            .unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // query shows results
-        let res = control.query_owner(deps.as_ref()).unwrap();
-        assert_eq!(Some(friend.to_string()), res.owner);
+        let info = mock_info("owner_addr", &[]);
+        // must err for previous
+        let err = obj.assert_owner(deps.as_ref(), &info).unwrap_err();
+        assert_eq!(err, OwnerError::NotOwner {}); 
     }
 }

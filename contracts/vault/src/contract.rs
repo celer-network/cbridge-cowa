@@ -5,7 +5,7 @@ use cw2::set_contract_version;
 use cw20::{Cw20ReceiveMsg};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
 use crate::state::{ State, STATE, OWNER};
 
 // version info for migration info
@@ -26,9 +26,8 @@ pub fn instantiate(
         sig_checker: msg.sig_checker.clone(),
     };
     STATE.save(deps.storage, &state)?;
-    // set owner
-    let owner = info.sender.clone();
-    OWNER.set(deps, Some(owner));
+    // set init owner
+    OWNER.init_set(deps, &info.sender.clone())?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -44,11 +43,11 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        // only owner funcs are put on top
-        // set new owner, execute_update_owner checks info.sender equals saved owner
-        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.execute_update_owner(deps, info, Some(newowner))?),
-        ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, newaddr),
-        
+        // ONLY owner. set new owner, execute_update_owner checks info.sender equals saved owner
+        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
+        // ONLY owner. update address for sig checker contract
+        ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
+        // only sig checker can call this
         ExecuteMsg::Withdraw {pbmsg} => do_withdraw(deps, info, pbmsg),
         // cw20 Receive for user deposit
         ExecuteMsg::Receive(msg) => do_deposit(deps, info, msg),
@@ -71,11 +70,14 @@ pub fn do_withdraw(
 pub fn update_sigchecker(
     deps: DepsMut,
     info: MessageInfo,
-    newaddr: Addr,
+    newaddr: &str,
 ) -> Result<Response, ContractError> {
-    OWNER.assert_owner(deps.as_ref(), &info.sender);
+    // must called by owner
+    OWNER.assert_owner(deps.as_ref(), &info)?;
+    // make sure newaddr is valid
+    let valid_addr = deps.api.addr_validate(newaddr)?;
     STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.sig_checker = newaddr.clone();
+        state.sig_checker = valid_addr;
         Ok(state)
     })?;
 
@@ -112,11 +114,16 @@ pub fn do_deposit(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetSigChecker {} => to_binary(&get_sigchecker(deps)?),
+        QueryMsg::GetConfig {} => to_binary(&get_config(deps)?),
     }
 }
 
-fn get_sigchecker(deps: Deps) -> StdResult<Addr> {
+fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
     let state = STATE.load(deps.storage)?;
-    Ok(state.sig_checker)
+    let owner = OWNER.get(deps)?;
+    let resp = GetConfigResp {
+        owner: Addr::unchecked(owner),
+        sig_checker: state.sig_checker, 
+    };
+    Ok(resp)
 }

@@ -11,11 +11,11 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {    
     // update contract owner
-    UpdateOwner{ newowner: Addr},
+    UpdateOwner{ newowner: String },
     // update sig_checker contract addr as withdraw msg must come from it
     // we can't use signers within vault because sgn only update signers
     // in cbridge module and cbridge contract
-    UpdateSigChecker{ newaddr: Addr},
+    UpdateSigChecker{ newaddr: String },
 
     // withdraw, info.sender must be sig_checker contract addr
     // user need to send pbmsg along with sigs to sigverify contract first
@@ -30,12 +30,19 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub struct DepositMsg { // user call cw20.send with this msg
     pub dst_chid: u64,
-    pub mint_acnt: Addr,
+    pub mint_acnt: String, /// ETH address Hex string without 0x prefix
     pub nonce: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetSigChecker {}, // return sig checker contract addr
+    GetConfig {}, // return owner, sig checker contract addr and other info, see GetConfigResp
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct GetConfigResp {
+    pub owner: Addr,
+    pub sig_checker: Addr,
 }
