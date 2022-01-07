@@ -10,19 +10,20 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {    
-    // update contract owner
+    /// update contract owner, must be valid cosmwasm bech32 string
     UpdateOwner{ newowner: String },
-    // update sig_checker contract addr as withdraw msg must come from it
-    // we can't use signers within vault because sgn only update signers
-    // in cbridge module and cbridge contract
+    /// update sig_checker contract addr as withdraw msg must come from it
+    /// we can't use signers within vault because sgn only update signers
+    /// in cbridge module and cbridge contract
+    /// must be valid cosmwasm bech32 string
     UpdateSigChecker{ newaddr: String },
 
-    // withdraw, info.sender must be sig_checker contract addr
-    // user need to send pbmsg along with sigs to sigverify contract first
+    /// withdraw, info.sender must be sig_checker contract addr
+    /// user need to send pbmsg along with sigs to sigverify contract first
     Withdraw { pbmsg: Binary },
 
-    // to be called by cw20 token contract for user deposit
-    // Cw20ReceiveMsg.msg is Deposit
+    /// to be called by cw20 token contract for user deposit
+    /// Cw20ReceiveMsg.msg is Deposit
     Receive(cw20::Cw20ReceiveMsg),
 }
 
