@@ -2,11 +2,11 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
-use cw20::{Cw20Contract, Cw20ExecuteMsg, Cw20ReceiveMsg};
+use cw20::{Cw20ReceiveMsg};
 
 use crate::error::ContractError;
 use crate::msg::{CountResponse, ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg};
-use crate::state::{State, STATE};
+use crate::state::{ STATE, OWNER};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault";
@@ -19,12 +19,10 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = State {
-        count: msg.count,
-        owner: info.sender.clone(),
-    };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    STATE.save(deps.storage, &state)?;
+
+    let owner = info.sender.clone();
+    OWNER.set(deps, Some(owner));
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -44,6 +42,8 @@ pub fn execute(
         ExecuteMsg::Reset { count } => try_reset(deps, info, count),
         // cw20 Receive for user deposit
         ExecuteMsg::Receive(msg) => do_deposit(deps, info, msg),
+        // set new owner, execute_update_owner checks info.sender equals saved owner
+        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.execute_update_owner(deps, info, Some(newowner))?)
     }
 }
 
@@ -57,9 +57,9 @@ pub fn do_deposit(
     let amount = wrapped.amount; // Uint128 amount
 
     let msg: DepositMsg = from_binary(&wrapped.msg)?;
-    // check per token deposit min/max
+    // check per token deposit min/max, return err if violate
     // calculate depositId
-    // check if depositId exists
+    // check if depositId exists, return err if found
     // save new depositId
     let res = Response::new()
         .add_attribute("action", "deposit")

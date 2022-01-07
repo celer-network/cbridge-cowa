@@ -15,6 +15,9 @@ pub enum ExecuteMsg {
     // to be called by cw20 token contract for user deposit
     // Cw20ReceiveMsg.msg is Deposit
     Receive(cw20::Cw20ReceiveMsg),
+    
+    // update contract owner
+    UpdateOwner{ newowner: cwstd::Addr},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
