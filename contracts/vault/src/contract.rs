@@ -1,12 +1,12 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{from_binary, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 use cw20::{Cw20ReceiveMsg};
 
 use crate::error::ContractError;
-use crate::msg::{CountResponse, ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg};
-use crate::state::{ STATE, OWNER};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg};
+use crate::state::{ State, STATE, OWNER};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault";
@@ -19,15 +19,21 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    // set version
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
+    // set state eg. sig_checker, if more cfg is needed, add to InstantiateMsg and State
+    let state = State {
+        sig_checker: msg.sig_checker.clone(),
+    };
+    STATE.save(deps.storage, &state)?;
+    // set owner
     let owner = info.sender.clone();
     OWNER.set(deps, Some(owner));
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender)
-        .add_attribute("count", msg.count.to_string()))
+        .add_attribute("sig_checker", msg.sig_checker))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -38,13 +44,44 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment {} => try_increment(deps),
-        ExecuteMsg::Reset { count } => try_reset(deps, info, count),
+        // only owner funcs are put on top
+        // set new owner, execute_update_owner checks info.sender equals saved owner
+        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.execute_update_owner(deps, info, Some(newowner))?),
+        ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, newaddr),
+        
+        ExecuteMsg::Withdraw {pbmsg} => do_withdraw(deps, info, pbmsg),
         // cw20 Receive for user deposit
         ExecuteMsg::Receive(msg) => do_deposit(deps, info, msg),
-        // set new owner, execute_update_owner checks info.sender equals saved owner
-        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.execute_update_owner(deps, info, Some(newowner))?)
     }
+}
+
+pub fn do_withdraw(
+    deps: DepsMut,
+    info: MessageInfo,
+    pbmsg: Binary,
+) -> Result<Response, ContractError> {
+    let state = STATE.load(deps.storage)?;
+    if state.sig_checker != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    let res = Response::new();
+    Ok(res)
+}
+
+pub fn update_sigchecker(
+    deps: DepsMut,
+    info: MessageInfo,
+    newaddr: Addr,
+) -> Result<Response, ContractError> {
+    OWNER.assert_owner(deps.as_ref(), &info.sender);
+    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+        state.sig_checker = newaddr.clone();
+        Ok(state)
+    })?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_sigchecker")
+        .add_attribute("newaddr", newaddr))
 }
 
 pub fn do_deposit(
@@ -72,34 +109,14 @@ pub fn do_deposit(
     Ok(res)
 }
 
-pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.count += 1;
-        Ok(state)
-    })?;
-
-    Ok(Response::new().add_attribute("method", "try_increment"))
-}
-
-pub fn try_reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        if info.sender != state.owner {
-            return Err(ContractError::Unauthorized {});
-        }
-        state.count = count;
-        Ok(state)
-    })?;
-    Ok(Response::new().add_attribute("method", "reset"))
-}
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
+        QueryMsg::GetSigChecker {} => to_binary(&get_sigchecker(deps)?),
     }
 }
 
-fn query_count(deps: Deps) -> StdResult<CountResponse> {
+fn get_sigchecker(deps: Deps) -> StdResult<Addr> {
     let state = STATE.load(deps.storage)?;
-    Ok(CountResponse { count: state.count })
+    Ok(state.sig_checker)
 }
