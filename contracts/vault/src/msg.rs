@@ -18,9 +18,12 @@ pub enum ExecuteMsg {
     /// must be valid cosmwasm bech32 string
     UpdateSigChecker{ newaddr: String },
 
-    /// withdraw, info.sender must be sig_checker contract addr
-    /// user need to send pbmsg along with sigs to sigverify contract first
-    Withdraw { pbmsg: Binary },
+    /// withdraw from user, vault contract will query sig_checker to verify sigs
+    /// unlike solidity, no need to send current signers and their powers
+    Withdraw {
+        pbmsg: Binary,
+        sigs: Vec<Binary>,
+    },
 
     /// to be called by cw20 token contract for user deposit
     /// Cw20ReceiveMsg.msg is Deposit

@@ -47,10 +47,14 @@ pub fn execute(
         ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
         // ONLY owner. update address for sig checker contract
         ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
-        // only sig checker can call this
-        ExecuteMsg::Withdraw {pbmsg} => do_withdraw(deps, info, pbmsg),
-        // cw20 Receive for user deposit
+        
+        // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
+        // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
+        // what about deposit id collision? same issue exists in solidity
         ExecuteMsg::Receive(msg) => do_deposit(deps, info, msg),
+
+        // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
+        ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, info, pbmsg, sigs),
     }
 }
 
@@ -58,11 +62,12 @@ pub fn do_withdraw(
     deps: DepsMut,
     info: MessageInfo,
     pbmsg: Binary,
+    sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
     let state = STATE.load(deps.storage)?;
-    if state.sig_checker != info.sender {
-        return Err(ContractError::Unauthorized {});
-    }
+    // deps.querier, state.sig_checker, calculate  pbmsg, sigs, "Withdraw"
+    // bytes32 domain = keccak256(abi.encodePacked(block.chainid, address(this), "Withdraw"));
+    // sigsVerifier.verifySigs(abi.encodePacked(domain, _request), _sigs, _signers, _powers);
     let res = Response::new();
     Ok(res)
 }
