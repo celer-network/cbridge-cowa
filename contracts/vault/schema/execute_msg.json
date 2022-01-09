@@ -45,7 +45,7 @@
       "additionalProperties": false
     },
     {
-      "description": "withdraw, info.sender must be sig_checker contract addr user need to send pbmsg along with sigs to sigverify contract first",
+      "description": "withdraw from user, vault contract will query sig_checker to verify sigs unlike solidity, no need to send current signers and their powers",
       "type": "object",
       "required": [
         "withdraw"
@@ -54,11 +54,18 @@
         "withdraw": {
           "type": "object",
           "required": [
-            "pbmsg"
+            "pbmsg",
+            "sigs"
           ],
           "properties": {
             "pbmsg": {
               "$ref": "#/definitions/Binary"
+            },
+            "sigs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Binary"
+              }
             }
           }
         }
