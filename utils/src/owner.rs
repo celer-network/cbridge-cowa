@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult};
+use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage};
 use cw_storage_plus::Item;
 
 /// Errors returned from Owner
@@ -23,11 +23,11 @@ impl<'a> Owner<'a> {
     }
 
     /// only allow set once. if already has owner, fail. owner should be info.sender
-    pub fn init_set(&self, deps: DepsMut, owner: &Addr) -> StdResult<()> {
+    pub fn init_set(&self, store: &mut dyn Storage, owner: &Addr) -> StdResult<()> {
         // storage has way to check if a key exists but it's hidden by Item.
-        match self.0.may_load(deps.storage)? {
+        match self.0.may_load(store)? {
             // not found, ok to set
-            None => self.0.save(deps.storage, &owner.clone().into_string()),
+            None => self.0.save(store, &owner.clone().into_string()),
             // found string, return error
             Some(_) => Err(StdError::generic_err("init_set called after owner already set")),
         }
@@ -92,12 +92,12 @@ mod tests {
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");
-        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
+        obj.init_set(deps.as_mut().storage, &owner_addr).unwrap();
 
         let got = obj.get(deps.as_ref()).unwrap();
         assert_eq!(got, "owner_addr");
         // try to call init_set again will cause err
-        let err = obj.init_set(deps.as_mut(), &owner_addr).unwrap_err();
+        let err = obj.init_set(deps.as_mut().storage, &owner_addr).unwrap_err();
         assert_eq!(err, StdError::generic_err("init_set called after owner already set"));
     }
 
@@ -107,7 +107,7 @@ mod tests {
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");
-        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
+        obj.init_set(deps.as_mut().storage, &owner_addr).unwrap();
 
         let info = mock_info(owner_addr.as_ref(), &[]);
         // must Ok
@@ -124,7 +124,7 @@ mod tests {
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");
-        obj.init_set(deps.as_mut(), &owner_addr).unwrap();
+        obj.init_set(deps.as_mut().storage, &owner_addr).unwrap();
 
         let info = mock_info(owner_addr.as_ref(), &[]);
         // must Ok

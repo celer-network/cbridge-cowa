@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use cosmwasm_std::{CanonicalAddr, Deps, DepsMut, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128};
 use cw_storage_plus::{Item, Map};
 
 /// Errors returned from Signers
@@ -52,11 +52,11 @@ impl<'a> Signers<'a> {
     }
 
     /// only allow set once. if already set, fail
-    pub fn init_set(&self, deps: DepsMut) -> StdResult<()> {
+    pub fn init_set(&self, store: &mut dyn Storage) -> StdResult<()> {
         // storage has way to check if a key exists but it's hidden by Item.
-        match self.0.may_load(deps.storage)? {
+        match self.0.may_load(store)? {
             // not found, ok to set
-            None => self.0.save(deps.storage, &SignersState{
+            None => self.0.save(store, &SignersState{
                 notice_period: 0,
                 reset_time: 0,
                 trigger_time: 0,
@@ -69,7 +69,7 @@ impl<'a> Signers<'a> {
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
     /// block_time is env.block.time.seconds();
-    pub fn reset_signers(&self, block_time: u64) -> StdResult<()> {
+    pub fn reset_signers(&self, block_time: u64, signers:&[&CanonicalAddr], powers: &[&Uint128]) -> StdResult<()> {
         // todo: impl
         Ok(())
     }
@@ -88,7 +88,7 @@ impl<'a> Signers<'a> {
     }
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
-    pub fn update_signers(&self, _trigger_time: u64, new_signers:&[&CanonicalAddr], new_powers: &[&Uint128], sigs: &[&[u8]], ) -> Result<Response, SignersError> {
+    pub fn update_signers(&self, _trigger_time: u64, new_signers:&[&CanonicalAddr], new_powers: &[&Uint128], sigs: &[&[u8]]) -> Result<Response, SignersError> {
         // calculate msg, then verify_sigs, then update
         Ok(Response::new())
     }

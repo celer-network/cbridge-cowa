@@ -27,7 +27,7 @@ pub fn instantiate(
     };
     STATE.save(deps.storage, &state)?;
     // set init owner
-    OWNER.init_set(deps, &info.sender.clone())?;
+    OWNER.init_set(deps.storage, &info.sender.clone())?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")

@@ -1,0 +1,38 @@
+[package]
+name = "bridge"
+version = "0.1.0"
+authors = ["Celer Network"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+debug = false
+debug-assertions = false
+lto = true
+opt-level = 3
+overflow-checks = true
+rpath = false
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cosmwasm-std = { version = "0.16.2" }
+cosmwasm-storage = { version = "0.16.2" }
+cw-controllers = { version = "0.8.1" }
+cw-storage-plus = { version = "0.8.1" }
+cw2 = { version = "0.8.1" }
+schemars = "0.8.3"
+serde = { version = "1.0.127", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0.26" }
+
+# our own utils crate
+utils = { path = "../../utils", version = "0.1.0" }
+
+[dev-dependencies]
+cosmwasm-schema = { version = "0.16.2" }
