@@ -10,9 +10,12 @@ pub enum SolType<'a> {
     Uint256(&'a [u8; 32]), // will left pad to 32 bytes, [u8] is big.Int.Bytes()
     // array type, we have to treat it differently due to encode packed pad array element
     AddrList(&'a Vec<[u8; 20]>),
+    Uint128List(&'a Vec<[u8; 16]>),
 }
 
 pub type Word = [u8; 32];
+
+pub const CHAIN_ID: u64 = 999999999;
 
 pub fn encode_packed(items: &[SolType]) -> Vec<u8> {
     let raw = items.iter().fold(Vec::new(), |mut acc, i| {
@@ -51,6 +54,15 @@ pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
             let encoded = encoded.join(&[][..]);
             raw.extend(encoded);
         }
+        SolType::Uint128List(a) => {
+            let encoded = a.iter().fold(Vec::new(), |mut acc, i| {
+                let padded = pad_uint128(i).to_vec();
+                acc.push(padded);
+                acc            
+            });
+            let encoded = encoded.join(&[][..]);
+            raw.extend(encoded);
+        }
     };
     return raw;
 }
@@ -61,6 +73,11 @@ fn pad_addr(addr: &[u8; 20]) -> Word {
     padded
 }
 
+fn pad_uint128(num: &[u8; 16]) -> Word {
+    let mut padded = [0u8; 32];
+    padded[16..].copy_from_slice(num);
+    padded
+}
 
 #[cfg(test)]
 mod tests {
