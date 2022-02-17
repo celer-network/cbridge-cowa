@@ -1,5 +1,7 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
+use utils::owner::OwnerError;
+use utils::signers::SignersError;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
@@ -8,6 +10,10 @@ pub enum ContractError {
 
     #[error("Unauthorized")]
     Unauthorized {},
-    // Add any other custom errors you like here.
-    // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
+
+    #[error("{0}")]
+    Owner(#[from] OwnerError),
+
+    #[error("{0}")]
+    Signers(#[from] SignersError),
 }

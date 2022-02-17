@@ -73,7 +73,7 @@ impl<'a> Signers<'a> {
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
     /// block_time is env.block.time.seconds();
-    pub fn reset_signers(&self, store: &mut dyn Storage, block_time: u64, signers:&[&CanonicalAddr], powers: &[&Uint128]) -> Result<Response, SignersError> {
+    pub fn reset_signers(&self, store: &mut dyn Storage, block_time: u64, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(store)?;
         if signer_state.reset_time >= block_time {
             return Err(SignersError::Std(StdError::generic_err("not reach reset time")));
@@ -84,13 +84,13 @@ impl<'a> Signers<'a> {
         self._update_signers(store, signers, powers)
     }
 
-    fn _update_signers(&self, store: &mut dyn Storage, signers:&[&CanonicalAddr], powers: &[&Uint128]) -> Result<Response, SignersError> {
+    fn _update_signers(&self, store: &mut dyn Storage, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
         if signers.len() != powers.len() {
             return Err(SignersError::Std(StdError::generic_err("signers and powers length not match")));
         }
         let mut signer_powers: HashMap<CanonicalAddr, Uint128> = HashMap::new();
         for i in 0..signers.len() {
-            signer_powers.insert(signers[i].clone(), *powers[i]);
+            signer_powers.insert(signers[i].clone(), powers[i]);
         }
         self.1.save(store, &signer_powers)?;
 
@@ -121,7 +121,7 @@ impl<'a> Signers<'a> {
     }
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
-    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[&CanonicalAddr], new_powers: &[&Uint128], sigs: &[&[u8]]) -> Result<Response, SignersError> {
+    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[CanonicalAddr], new_powers: &[Uint128], sigs: &[&[u8]]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
         if signer_state.trigger_time >= trigger_time {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
@@ -191,7 +191,7 @@ impl<'a> Signers<'a> {
                 return Err(SignersError::Std(StdError::generic_err("signer not found")));
             }
         }
-        Err(SignersError::Std(StdError::generic_err("quorum not reached")))
+        Err(SignersError::NotEnoughPower {})
     }
 
     /// return signerstate. if not set, error

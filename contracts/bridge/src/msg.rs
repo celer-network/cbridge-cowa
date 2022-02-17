@@ -9,10 +9,6 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    VerifySigs {
-        msg: Binary, 
-        sigs: Vec<Binary>
-    },
     ResetSigners {
         signers:Vec<CanonicalAddr>, 
         powers: Vec<Uint128>
@@ -27,4 +23,8 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
+    VerifySigs {
+        msg: Binary, 
+        sigs: Vec<Binary>
+    },
 }
