@@ -1,14 +1,14 @@
 /// signers keep a map of CanonicalAddr(eth 20 bytes) to U256 sign power
 /// and can verify if a msg has enough sigs
 /// we don't save a hash like evm because it tradeoff more calldata to save storage cost
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap, convert::TryInto, ops::{Add, Mul, Div}};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
 use crypto::{sha3::Sha3, digest::Digest};
-use crate::abi;
+use crate::{abi, func::MsgHash};
 
 use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut};
 use cw_storage_plus::{Item};
@@ -138,8 +138,7 @@ impl<'a> Signers<'a> {
                 ]));
         let domain: &mut [u8] = &mut [];
         hasher.result(domain);
-        hasher.input(
-            &abi::encode_packed(
+        let msg = abi::encode_packed(
                 &[
                     abi::SolType::Bytes(domain), 
                     abi::SolType::Bytes(&trigger_time.to_be_bytes()),
@@ -153,11 +152,9 @@ impl<'a> Signers<'a> {
                             let a: Result<[u8;16], _> = i.u128().to_be_bytes().try_into();
                             a.unwrap()
                         }).collect()), 
-                ]));
-        let msg: &mut [u8] = &mut [];
-        hasher.result(msg);
+                ]);
 
-        self.verify_sigs(deps.as_ref(), msg, sigs)?;
+        self.verify_sigs(deps.as_ref(), msg.as_slice(), sigs)?;
 
         self._update_signers(deps.storage, new_signers, new_powers)?;
 
@@ -168,37 +165,33 @@ impl<'a> Signers<'a> {
 
     /// verify msg is signed with enough power, msg will be keccak256(_msg).toEthSignedMessageHash() internally
     pub fn verify_sigs(&self, deps: Deps, msg: &[u8], sigs: &[&[u8]]) -> Result<Response, SignersError> {
-        //bytes32 h = keccak256(abi.encodePacked(_signers, _powers));
-        //require(ssHash == h, "Mismatch current signers");
-        // require(_signers.length == _powers.length, "signers and powers length not match");
-        // uint256 totalPower; // sum of all signer.power
-        // for (uint256 i = 0; i < _signers.length; i++) {
-        //     totalPower += _powers[i];
-        // }
-        // uint256 quorum = (totalPower * 2) / 3 + 1;
+        let mut hasher = Sha3::keccak256();
+        hasher.input(msg);
+        let hash: &mut [u8] = &mut [];
+        hasher.result(hash);
+        let mut msg_hash = MsgHash(hash);
+        msg_hash = msg_hash.to_eth_signed_message_hash();
 
-        // uint256 signedPower; // sum of signer powers who are in sigs
-        // address prev = address(0);
-        // uint256 index = 0;
-        // for (uint256 i = 0; i < _sigs.length; i++) {
-        //     address signer = _hash.recover(_sigs[i]);
-        //     require(signer > prev, "signers not in ascending order");
-        //     prev = signer;
-        //     // now find match signer add its power
-        //     while (signer > _signers[index]) {
-        //         index += 1;
-        //         require(index < _signers.length, "signer not found");
-        //     }
-        //     if (signer == _signers[index]) {
-        //         signedPower += _powers[index];
-        //     }
-        //     if (signedPower >= quorum) {
-        //         // return early to save gas
-        //         return;
-        //     }
-        // }
-        // revert("quorum not reached");
-        Ok(Response::new())
+        let signers = &self.1.load(deps.storage)?;
+        let mut total_power = Uint128::from(0u128);
+        for (_, power) in signers {
+            total_power = total_power.add(power);
+        }
+        let quorum = total_power.mul(Uint128::from(2u128)).div(Uint128::from(3u128)).add(Uint128::from(1u128));
+
+        let mut signed_power = Uint128::from(0u128);
+        for sig in sigs {
+            let signer = msg_hash.recover_signer(&sig.to_vec());
+            if let Some(power) = signers.get(&signer) {
+                signed_power = signed_power.add(power);
+                if signed_power >= quorum {
+                    return Ok(Response::new());
+                }
+            } else {
+                return Err(SignersError::Std(StdError::generic_err("signer not found")));
+            }
+        }
+        Err(SignersError::Std(StdError::generic_err("quorum not reached")))
     }
 
     /// return signerstate. if not set, error
