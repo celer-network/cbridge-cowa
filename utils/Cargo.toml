@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 cosmwasm-std = { version = "0.16.2" }
 cosmwasm-storage = { version = "0.16.2" }
+cosmwasm-crypto = { version = "0.16.2" }
 cw-controllers = { version = "0.8.1" }
 cw-storage-plus = { version = "0.8.1" }
 cw2 = { version = "0.8.1" }

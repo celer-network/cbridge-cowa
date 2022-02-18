@@ -8,13 +8,14 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crypto::{sha3::Sha3, digest::Digest};
-use crate::{abi, func::MsgHash};
+use crate::{abi, func};
 
 use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut};
 use cw_storage_plus::{Item};
+use cosmwasm_crypto::CryptoError;
 
 /// Errors returned from Signers
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum SignersError {
     #[error("{0}")]
     Std(#[from] StdError),
@@ -27,6 +28,9 @@ pub enum SignersError {
 
     #[error("triggerTime is not valid")]
     BadTriggerTime {},
+
+    #[error("{0}")]
+    CryptoError(#[from] CryptoError),
 }
 
 /// save triggerTime, resetTime and noticePeriod
@@ -169,8 +173,6 @@ impl<'a> Signers<'a> {
         hasher.input(msg);
         let hash: &mut [u8] = &mut [];
         hasher.result(hash);
-        let mut msg_hash = MsgHash(hash);
-        msg_hash = msg_hash.to_eth_signed_message_hash();
 
         let signers = &self.1.load(deps.storage)?;
         let mut total_power = Uint128::from(0u128);
@@ -181,7 +183,7 @@ impl<'a> Signers<'a> {
 
         let mut signed_power = Uint128::from(0u128);
         for sig in sigs {
-            let signer = msg_hash.recover_signer(&sig.to_vec());
+            let signer = func::recover_signer(hash, sig)?;
             if let Some(power) = signers.get(&signer) {
                 signed_power = signed_power.add(power);
                 if signed_power >= quorum {

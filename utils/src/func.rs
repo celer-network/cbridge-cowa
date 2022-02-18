@@ -1,37 +1,29 @@
-use cosmwasm_std::CanonicalAddr;
-/*
-use sha3::Keccak256;
-use cosmwasm_std::CanonicalAddr;
+use std::convert::TryInto;
+
+use cosmwasm_std::{CanonicalAddr};
 use cosmwasm_crypto::secp256k1_recover_pubkey;
+use cosmwasm_crypto::CryptoError;
 
-fn keccak(input: &[u8]) -> [u8; 32] {
-    let mut hash = [0u8; 32];
-    keccak256(&input, &mut hash);
-    hash
+use crypto::{sha3::Sha3, digest::Digest};
+
+pub fn recover_signer(msg_hash: &[u8], sig: &[u8]) -> Result<CanonicalAddr, CryptoError> {
+    let sig = read_sig(sig)?;
+    
+    let signature = &sig[0..64];
+    let v = match sig[64] {
+        0..=26 => sig[64],
+        _ => sig[64] - 27,
+    };
+    
+    let addr_result = secp256k1_recover_pubkey(msg_hash, signature, v)?;
+    
+    let mut hasher = Sha3::keccak256();
+    hasher.input(&addr_result.as_slice()[1..]);
+    let domain: &mut [u8] = &mut [];
+    hasher.result(domain);
+    Ok(CanonicalAddr::from(&domain[12..32]))
 }
-*/
-pub struct MsgHash<'a>(pub &'a [u8]);
 
-impl<'a> MsgHash<'a> {
-
-    pub fn to_eth_signed_message_hash(&self) -> Self {
-        // to impl
-        return MsgHash(&[])
-    }
-
-    pub fn recover_signer(&self, sig: &Vec<u8>) -> CanonicalAddr {
-        //let mut hasher = Sha256::new();
-        //hasher.update([self.signed_data_prefix.as_slice(), block_hash.as_slice(), self.signed_data_suffix.as_slice()].concat());
-        //let hash_result = Vec::from(&hasher.finalize()[..]);
-        //let signature = [self.r, self.s].concat();
-        //let addr_result = secp256k1_recover_pubkey(hash_result.as_slice(), signature.as_slice(), self.v-27u8).unwrap();
-        //let mut hasher = Keccak256::new();
-        //hasher.update(&addr_result.as_slice()[1..]);
-        //let result = &hasher.finalize()[12..32];
-        //return CanonicalAddr::from(result);
-        
-        // to impl
-        let result: &[u8]= &[];
-        CanonicalAddr::from(result)
-    }
+fn read_sig(sig: &[u8]) -> Result<[u8;65], CryptoError> {
+    sig.try_into().map_err(|_| CryptoError::InvalidSignatureFormat{})
 }
