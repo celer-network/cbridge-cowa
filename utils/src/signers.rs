@@ -138,7 +138,7 @@ impl<'a> Signers<'a> {
                 &[
                     abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()), 
                     abi::SolType::Bytes(contract_addr.as_bytes()),
-                    abi::SolType::Str("update_signers")
+                    abi::SolType::Str("UpdateSigners")
                 ]));
         let domain: &mut [u8] = &mut [];
         hasher.result(domain);
@@ -174,6 +174,8 @@ impl<'a> Signers<'a> {
         let hash: &mut [u8] = &mut [];
         hasher.result(hash);
 
+        let eth_msg = func::to_eth_signed_message_hash(hash)?;
+
         let signers = &self.1.load(deps.storage)?;
         let mut total_power = Uint128::from(0u128);
         for (_, power) in signers {
@@ -183,7 +185,7 @@ impl<'a> Signers<'a> {
 
         let mut signed_power = Uint128::from(0u128);
         for sig in sigs {
-            let signer = func::recover_signer(hash, sig)?;
+            let signer = func::recover_signer(eth_msg, sig)?;
             if let Some(power) = signers.get(&signer) {
                 signed_power = signed_power.add(power);
                 if signed_power >= quorum {
