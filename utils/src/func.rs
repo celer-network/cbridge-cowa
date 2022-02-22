@@ -5,10 +5,11 @@ use cosmwasm_crypto::secp256k1_recover_pubkey;
 use cosmwasm_crypto::CryptoError;
 
 use crypto::{sha3::Sha3, digest::Digest};
+use rustc_serialize::hex::FromHex;
 
 use crate::abi;
 
-pub fn to_eth_signed_message_hash(hash: &mut [u8]) -> Result<&[u8], CryptoError> {
+pub fn to_eth_signed_message_hash(hash: &mut [u8]) -> Result<Vec<u8>, CryptoError> {
     let msg_hash = read_hash(hash)?;
 
     let mut hasher = Sha3::keccak256();
@@ -18,8 +19,7 @@ pub fn to_eth_signed_message_hash(hash: &mut [u8]) -> Result<&[u8], CryptoError>
                 abi::SolType::Str("\x19Ethereum Signed Message:\n32"),
                 abi::SolType::Bytes32(&msg_hash),
             ]));
-    hasher.result(hash);
-    Ok(hash)
+    Ok(hasher.result_str().from_hex().unwrap())
 }
 
 pub fn recover_signer(msg_hash: &[u8], sig: &[u8]) -> Result<CanonicalAddr, CryptoError> {
@@ -35,9 +35,8 @@ pub fn recover_signer(msg_hash: &[u8], sig: &[u8]) -> Result<CanonicalAddr, Cryp
     
     let mut hasher = Sha3::keccak256();
     hasher.input(&addr_result.as_slice()[1..]);
-    let domain: &mut [u8] = &mut [];
-    hasher.result(domain);
-    Ok(CanonicalAddr::from(&domain[12..32]))
+    let addr_hash = hasher.result_str().from_hex().unwrap();
+    Ok(CanonicalAddr::from(&addr_hash[12..32]))
 }
 
 fn read_sig(sig: &[u8]) -> Result<[u8; 65], CryptoError> {

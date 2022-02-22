@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crypto::{sha3::Sha3, digest::Digest};
+use rustc_serialize::hex::FromHex;
 use crate::{abi, func};
 
 use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut};
@@ -44,12 +45,18 @@ pub struct SignersState {
     pub notice_period: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct SignerPowers {
+    signers: Vec<CanonicalAddr>, 
+    powers: Vec<Uint128>,
+}
+
 /// Signers has 0 as state and 1 a map of CanoAddr to signing power
 /// note we use Uint128 as it's a wrap of native u128 and cheaper and should be enough
 /// also here we MUST use CanonicalAddr as key because recovered signers are ETH addr 20 bytes
 pub struct Signers<'a>(
     Item<'a, SignersState>,
-    Item<'a, HashMap<CanonicalAddr, Uint128>>
+    Item<'a, SignerPowers>
 );
 
 // this is the core business logic we expose
@@ -92,11 +99,10 @@ impl<'a> Signers<'a> {
         if signers.len() != powers.len() {
             return Err(SignersError::Std(StdError::generic_err("signers and powers length not match")));
         }
-        let mut signer_powers: HashMap<CanonicalAddr, Uint128> = HashMap::new();
-        for i in 0..signers.len() {
-            signer_powers.insert(signers[i].clone(), powers[i]);
-        }
-        self.1.save(store, &signer_powers)?;
+        self.1.save(store, &SignerPowers {
+            signers: signers.to_vec(), 
+            powers: powers.to_vec()}
+        )?;
 
         Ok(Response::new())
     }
@@ -125,6 +131,7 @@ impl<'a> Signers<'a> {
     }
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
+    /// contract_addr will be 12..32 of the hash of the addr
     pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[CanonicalAddr], new_powers: &[Uint128], sigs: &[&[u8]]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
         if signer_state.trigger_time >= trigger_time {
@@ -133,18 +140,22 @@ impl<'a> Signers<'a> {
         
         // calculate msg, then verify_sigs, then update
         let mut hasher = Sha3::keccak256();
+        hasher.input(contract_addr.as_bytes());
+        let contract_addr = hasher.result_str().from_hex().unwrap();
+        let contract_addr: &[u8;20] = contract_addr[12..32].try_into().unwrap();
+
+        hasher.reset();
         hasher.input(
             &abi::encode_packed(
                 &[
                     abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()), 
-                    abi::SolType::Bytes(contract_addr.as_bytes()),
+                    abi::SolType::Addr(contract_addr),
                     abi::SolType::Str("UpdateSigners")
                 ]));
-        let domain: &mut [u8] = &mut [];
-        hasher.result(domain);
+        let domain = hasher.result_str().from_hex().unwrap();
         let msg = abi::encode_packed(
                 &[
-                    abi::SolType::Bytes(domain), 
+                    abi::SolType::Bytes(&domain), 
                     abi::SolType::Bytes(&trigger_time.to_be_bytes()),
                     abi::SolType::AddrList(&new_signers.iter().map(
                         |i| -> [u8;20] {
@@ -171,22 +182,25 @@ impl<'a> Signers<'a> {
     pub fn verify_sigs(&self, deps: Deps, msg: &[u8], sigs: &[&[u8]]) -> Result<Response, SignersError> {
         let mut hasher = Sha3::keccak256();
         hasher.input(msg);
-        let hash: &mut [u8] = &mut [];
-        hasher.result(hash);
+        let hash = hasher.result_str().from_hex().unwrap();
+        let hash: &mut [u8] = &mut hash.clone();
 
         let eth_msg = func::to_eth_signed_message_hash(hash)?;
 
         let signers = &self.1.load(deps.storage)?;
         let mut total_power = Uint128::from(0u128);
-        for (_, power) in signers {
-            total_power = total_power.add(power);
+        let mut signer_powers: HashMap<CanonicalAddr, Uint128> = HashMap::new();
+        for i in 0..signers.signers.len() {
+            total_power = total_power.add(signers.powers[i]);
+            signer_powers.insert(signers.signers[i].clone(), signers.powers[i]);
         }
+
         let quorum = total_power.mul(Uint128::from(2u128)).div(Uint128::from(3u128)).add(Uint128::from(1u128));
 
         let mut signed_power = Uint128::from(0u128);
         for sig in sigs {
-            let signer = func::recover_signer(eth_msg, sig)?;
-            if let Some(power) = signers.get(&signer) {
+            let signer = func::recover_signer(&eth_msg, sig)?;
+            if let Some(power) = signer_powers.get(&signer) {
                 signed_power = signed_power.add(power);
                 if signed_power >= quorum {
                     return Ok(Response::new());
