@@ -148,7 +148,7 @@ impl<'a> Signers<'a> {
         hasher.input(
             &abi::encode_packed(
                 &[
-                    abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()), 
+                    abi::SolType::Uint256(&cosmwasm_std::Uint256::from(abi::CHAIN_ID).to_be_bytes()), 
                     abi::SolType::Addr(contract_addr),
                     abi::SolType::Str("UpdateSigners")
                 ]));
@@ -156,16 +156,15 @@ impl<'a> Signers<'a> {
         let msg = abi::encode_packed(
                 &[
                     abi::SolType::Bytes(&domain), 
-                    abi::SolType::Bytes(&trigger_time.to_be_bytes()),
+                    abi::SolType::Uint256(&cosmwasm_std::Uint256::from(trigger_time).to_be_bytes()), 
                     abi::SolType::AddrList(&new_signers.iter().map(
                         |i| -> [u8;20] {
                             let a: Result<[u8;20], _> = i.as_slice().try_into();
                             a.unwrap()
                         }).collect()),
-                    abi::SolType::Uint128List(&new_powers.iter().map(
-                        |i| -> [u8;16] {
-                            let a: Result<[u8;16], _> = i.u128().to_be_bytes().try_into();
-                            a.unwrap()
+                    abi::SolType::Uint256List(&new_powers.iter().map(
+                        |i| -> [u8;32] {
+                            cosmwasm_std::Uint256::from(i.u128()).to_be_bytes()
                         }).collect()), 
                 ]);
 
