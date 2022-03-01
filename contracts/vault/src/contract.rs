@@ -6,6 +6,7 @@ use cw20::{Cw20ReceiveMsg};
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
+use crate::vault;
 use crate::state::{ State, STATE, OWNER};
 
 // version info for migration info
@@ -65,6 +66,7 @@ pub fn do_withdraw(
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
     let state = STATE.load(deps.storage)?;
+    let withdraw: vault::Withdraw = vault::deserialize_withdraw(pbmsg.as_slice())?;
     // deps.querier, state.sig_checker, calculate  pbmsg, sigs, "Withdraw"
     // bytes32 domain = keccak256(abi.encodePacked(block.chainid, address(this), "Withdraw"));
     // sigsVerifier.verifySigs(abi.encodePacked(domain, _request), _sigs, _signers, _powers);
