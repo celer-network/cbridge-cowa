@@ -13,4 +13,7 @@ pub enum ContractError {
     // OwnerError could happen from owner funcs
     #[error("{0}")]
     Owner(#[from] OwnerError),
+
+    #[error("{0}")]
+    DecodeError(#[from] prost::DecodeError)
 }

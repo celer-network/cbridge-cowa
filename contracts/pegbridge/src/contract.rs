@@ -1,10 +1,11 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp};
+use crate::pegbridge;
 use crate::state::{ State, STATE, OWNER};
 
 // version info for migration info
@@ -61,6 +62,7 @@ pub fn do_mint(
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
     let state = STATE.load(deps.storage)?;
+    let mint: pegbridge::Mint = pegbridge::deserialize_mint(pbmsg.as_slice())?;
     // deps.querier, state.sig_checker, calculate  pbmsg, sigs, "Mint"
     // bytes32 domain = keccak256(abi.encodePacked(block.chainid, address(this), "Mint"));
     // sigsVerifier.verifySigs(abi.encodePacked(domain, _request), _sigs, _signers, _powers);
