@@ -229,6 +229,10 @@ mod tests {
         let info = mock_info(owner_addr.as_ref(), &[]);
         obj.instantiate(deps.as_mut(), info).expect("failed to instantiate");
 
+        let info = mock_info(anyone_addr.as_ref(), &[]);
+        let err = obj.execute_add_pauser(deps.as_mut(), info, anyone_addr.as_ref().to_string()).unwrap_err();
+        assert_eq!(err, PauserError::OwnerError(OwnerError::NotOwner {}));
+
         let info = mock_info(owner_addr.as_ref(), &[]);
         let resp = obj.execute_add_pauser(deps.as_mut(), info, anyone_addr.as_ref().to_string()).unwrap();
         assert_eq!(resp.attributes.contains(&Attribute::new("new_pauser", &anyone_addr)), true);
