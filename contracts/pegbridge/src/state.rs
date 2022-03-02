@@ -6,7 +6,7 @@ use utils::owner::Owner;
 pub const OWNER: Owner = Owner::new("owner"); // save Item under key: owner
 
 use cosmwasm_std::Addr;
-use cw_storage_plus::Item;
+use cw_storage_plus::{Item, Map};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
@@ -14,3 +14,4 @@ pub struct State {
 }
 
 pub const STATE: Item<State> = Item::new("state");
+pub const MINT_IDS: Map<Vec<u8>, bool> = Map::new("mint_ids");

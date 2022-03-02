@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use crypto::{sha3::Sha3, digest::Digest};
-use rustc_serialize::hex::FromHex;
 use crate::{abi, func};
 
 use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut};
@@ -137,22 +135,8 @@ impl<'a> Signers<'a> {
         if signer_state.trigger_time >= trigger_time {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
         }
-        
-        // calculate msg, then verify_sigs, then update
-        let mut hasher = Sha3::keccak256();
-        hasher.input(contract_addr.as_bytes());
-        let contract_addr = hasher.result_str().from_hex().unwrap();
-        let contract_addr: &[u8;20] = contract_addr[12..32].try_into().unwrap();
 
-        hasher.reset();
-        hasher.input(
-            &abi::encode_packed(
-                &[
-                    abi::SolType::Uint256(&cosmwasm_std::Uint256::from(abi::CHAIN_ID).to_be_bytes()), 
-                    abi::SolType::Addr(contract_addr),
-                    abi::SolType::Str("UpdateSigners")
-                ]));
-        let domain = hasher.result_str().from_hex().unwrap();
+        let domain = func::get_domain(contract_addr, "UpdateSigners");
         let msg = abi::encode_packed(
                 &[
                     abi::SolType::Bytes(&domain), 
@@ -179,9 +163,7 @@ impl<'a> Signers<'a> {
 
     /// verify msg is signed with enough power, msg will be keccak256(_msg).toEthSignedMessageHash() internally
     pub fn verify_sigs(&self, deps: Deps, msg: &[u8], sigs: &[&[u8]]) -> Result<Response, SignersError> {
-        let mut hasher = Sha3::keccak256();
-        hasher.input(msg);
-        let hash = hasher.result_str().from_hex().unwrap();
+        let hash = func::keccak256(msg);
         let hash: &mut [u8] = &mut hash.clone();
 
         let eth_msg = func::to_eth_signed_message_hash(hash)?;

@@ -1,12 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg};
 use cw2::set_contract_version;
+use utils::func::keccak256;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp};
 use crate::pegbridge;
-use crate::state::{ State, STATE, OWNER};
+use crate::state::{ State, STATE, OWNER, MINT_IDS};
+
+use utils::{abi, func};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault";
@@ -38,7 +41,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -51,22 +54,60 @@ pub fn execute(
         ExecuteMsg::Burn {token, amount, to_chain_id, to_account, nonce} 
             => do_burn(deps, info,token, amount, to_chain_id, to_account, nonce),
 
-        ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, info, pbmsg, sigs),
+        ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, env.contract.address, pbmsg, sigs),
     }
 }
 
 pub fn do_mint(
     deps: DepsMut,
-    info: MessageInfo,
+    contract_addr: Addr,
     pbmsg: Binary,
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
+    let domain = func::get_domain(contract_addr.clone(), "Mint");
+    let msg = abi::encode_packed(
+            &[
+                abi::SolType::Bytes(&domain), 
+                abi::SolType::Bytes(pbmsg.as_slice()),
+            ]);
+    let verify_sig_msg = bridge::msg::QueryMsg::VerifySigs {
+        msg: Binary::from(msg), 
+        sigs: sigs,
+    };
     let state = STATE.load(deps.storage)?;
+    deps.querier.query_wasm_smart(state.sig_checker, &verify_sig_msg)?;
+
     let mint: pegbridge::Mint = pegbridge::deserialize_mint(pbmsg.as_slice())?;
-    // deps.querier, state.sig_checker, calculate  pbmsg, sigs, "Mint"
-    // bytes32 domain = keccak256(abi.encodePacked(block.chainid, address(this), "Mint"));
-    // sigsVerifier.verifySigs(abi.encodePacked(domain, _request), _sigs, _signers, _powers);
-    let res = Response::new();
+    let mint_id = keccak256(&abi::encode_packed(
+        &[
+            abi::SolType::Bytes(&mint.account),
+            abi::SolType::Bytes(&mint.token),
+            abi::SolType::Bytes(&mint.amount),
+            abi::SolType::Bytes(&mint.depositor),
+            abi::SolType::Bytes(&mint.ref_chain_id.to_be_bytes()),
+            abi::SolType::Bytes(&mint.ref_id),
+            abi::SolType::Bytes(&contract_addr.as_bytes())
+        ]));
+    if MINT_IDS.has(deps.storage, mint_id.clone()) {
+        return Err(ContractError::Std(StdError::generic_err("record exists")));
+    }
+    MINT_IDS.save(deps.storage, mint_id.clone(), &true)?;
+
+    let res = Response::new()
+        .add_attribute("action", "mint")
+        .add_attribute("mint_id", hex::encode(mint_id))
+        .add_attribute("token", hex::encode(mint.token))
+        .add_attribute("account", hex::encode(mint.account))
+        .add_attribute("amount", hex::encode(mint.amount))
+        .add_attribute("ref_chain_id", mint.ref_chain_id.to_string())
+        .add_attribute("ref_id", hex::encode(mint.ref_id))
+        .add_attribute("depositor", hex::encode(mint.depositor))
+        // .add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+        //     contract_addr: hex::encode(mint.token),
+        //     msg: , // TODO: implement PeggedToken contract and mint msg
+        //     funds: vec![],
+        // }))
+        ;
     Ok(res)
 }
 
