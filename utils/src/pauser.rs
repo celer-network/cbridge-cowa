@@ -32,7 +32,7 @@ const PAUSED_NAMESPACE: &str = "paused";
 const PAUSERS_NAMESPACE: &str = "pausers";
 
 pub struct Pauser<'a>{
-    owner: Owner<'a>,
+    pub owner: Owner<'a>,
     paused: Item<'a, bool>,
     pausers: Map<'a, &'a Addr, bool>,
 }

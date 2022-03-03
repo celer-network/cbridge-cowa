@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 // pub const OWNER: Owner = Owner::new("owner"); // save Item under key: owner
 
 use cosmwasm_std::Addr;
-use cw_storage_plus::Item;
 use utils::pauser::Pauser;
+use cw_storage_plus::{ Item, Map };
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
@@ -24,3 +24,4 @@ pub const STATE: Item<State> = Item::new("state");
     }
  */
 pub const PAUSER: Pauser = Pauser::new();
+pub const WD_IDS: Map<Vec<u8>, bool> = Map::new("wd_ids");
