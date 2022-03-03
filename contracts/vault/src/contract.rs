@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::convert::TryInto;
 
 #[cfg(not(feature = "library"))]
@@ -12,7 +11,7 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
 use crate::vault;
 
-use crate::state::{ State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT};
+use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER};
 
 use utils::{abi, func};
 
@@ -34,10 +33,13 @@ pub fn instantiate(
         sig_checker: msg.sig_checker.clone(),
     };
     STATE.save(deps.storage, &state)?;
+    // init owner
+    OWNER.init_set(deps.storage, &info.sender)?;
     // instantiate pauser
-    let resp = PAUSER.instantiate(deps.storage, info.sender.borrow())?;
+    let resp = PAUSER.instantiate(deps.storage, &info.sender)?;
 
     Ok(resp.add_attribute("method", "instantiate")
+        .add_attribute("owner", info.sender)
         .add_attribute("sig_checker", msg.sig_checker))
 }
 
@@ -50,7 +52,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         // ONLY owner. set new owner, execute_update_owner checks info.sender equals saved owner
-        ExecuteMsg::UpdateOwner { newowner } => Ok(PAUSER.owner.update_owner(deps, info, &newowner)?),
+        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
         // ONLY owner. update address for sig checker contract
         ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
 
@@ -145,7 +147,7 @@ pub fn update_sigchecker(
     newaddr: &str,
 ) -> Result<Response, ContractError> {
     // must called by owner
-    PAUSER.owner.assert_owner(deps.as_ref(), &info)?;
+    OWNER.assert_owner(deps.as_ref(), &info)?;
     // make sure newaddr is valid
     let valid_addr = deps.api.addr_validate(newaddr)?;
     STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
@@ -166,7 +168,7 @@ pub fn update_deposit_amt_setting(
     is_min: bool,
 ) -> Result<Response, ContractError> {
     // must called by owner
-    PAUSER.owner.assert_owner(deps.as_ref(), &info)?;
+    OWNER.assert_owner(deps.as_ref(), &info)?;
     // make sure token is valid
     let valid_addr = deps.api.addr_validate(token_addr)?;
     if is_min {
@@ -245,10 +247,33 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
     let state = STATE.load(deps.storage)?;
-    let owner = PAUSER.owner.get(deps)?;
+    let owner = OWNER.get(deps)?;
     let resp = GetConfigResp {
         owner: Addr::unchecked(owner),
         sig_checker: state.sig_checker, 
     };
     Ok(resp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+
+    #[test]
+    fn instantiate_test() {
+        let mut deps = mock_dependencies(&[]);
+        let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
+        let signer_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
+        let msg = InstantiateMsg{ sig_checker: signer_addr };
+        let info = mock_info(owner_addr.as_ref(), &[]);
+
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone());
+        assert!(!res.is_err());
+
+        // could not initialize twice
+        let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone());
+        assert!(res.is_err());
+    }
 }

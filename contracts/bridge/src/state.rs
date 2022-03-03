@@ -9,9 +9,9 @@ pub struct State {
 
 pub const STATE: Item<State> = Item::new("state");
 
-use utils::signers::Signers;
-pub const SIGNERS: Signers = Signers::new();
-
 use utils::owner::Owner;
 pub const OWNER: Owner = Owner::new("owner");
+
+use utils::signers::Signers;
+pub const SIGNERS: Signers = Signers::new(&OWNER);
 

@@ -2,9 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // this will save the bech32 string addr
-// owner is included in pauser
-// use utils::owner::Owner;
-// pub const OWNER: Owner = Owner::new("owner"); // save Item under key: owner
+use utils::owner::Owner;
+pub const OWNER: Owner = Owner::new("owner"); // save Item under key: owner
 
 use cosmwasm_std::Addr;
 use utils::pauser::Pauser;
@@ -19,12 +18,12 @@ pub const STATE: Item<State> = Item::new("state");
 
 /*
     Pauser {
-        Owner,   // default storage_key is "owner"
+        &Owner,   // a reference of OWNER
         Paused,  // default storage_key is "paused"
         Pausers, // default storage_key is "pausers"
     }
  */
-pub const PAUSER: Pauser = Pauser::new();
+pub const PAUSER: Pauser = Pauser::new("paused", "pausers", &OWNER);
 
 pub const DEP_IDS: Map<Vec<u8>, bool> = Map::new("dep_ids");
 pub const WD_IDS: Map<Vec<u8>, bool> = Map::new("wd_ids");

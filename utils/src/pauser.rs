@@ -44,6 +44,7 @@ impl<'a> Pauser<'a> {
 
     /// as constructor in solidity, can only be called once
     pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response, PauserError> {
+        // make sure Owner has already been set.
         self.owner.only_owner(store.deref(),caller)?;
         self.paused.save(store, &false)?;
         self.add_pauser(store, caller)
@@ -136,14 +137,14 @@ impl<'a> Pauser<'a> {
     /// add a pauser, can only be called by owner
     pub fn execute_add_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, PauserError> {
         let pauser = deps.api.addr_validate(&address)?;
-        self.owner.assert_owner(deps.as_ref(), &info)?;
+        self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.add_pauser(deps.storage, &pauser)
     }
 
     /// remove a pauser, can only be called by owner
     pub fn execute_remove_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, PauserError> {
         let pauser = deps.api.addr_validate(&address)?;
-        self.owner.assert_owner(deps.as_ref(), &info)?;
+        self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.remove_pauser(deps.storage, &pauser)
     }
 

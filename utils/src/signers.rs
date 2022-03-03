@@ -2,6 +2,7 @@
 /// and can verify if a msg has enough sigs
 /// we don't save a hash like evm because it tradeoff more calldata to save storage cost
 use std::{collections::HashMap, convert::TryInto, ops::{Add, Mul, Div}};
+use std::ops::Deref;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -9,9 +10,10 @@ use thiserror::Error;
 
 use crate::{abi, func};
 
-use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut};
+use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut, MessageInfo, Binary};
 use cw_storage_plus::{Item};
 use cosmwasm_crypto::CryptoError;
+use crate::owner::{Owner, OwnerError};
 
 /// Errors returned from Signers
 #[derive(Error, Debug)]
@@ -19,8 +21,8 @@ pub enum SignersError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Caller is not owner")]
-    NotOwner {},
+    #[error("{0}")]
+    OwnerError(#[from] OwnerError),
 
     #[error("signing power not enough")]
     NotEnoughPower {},
@@ -54,43 +56,50 @@ pub struct SignerPowers {
 /// also here we MUST use CanonicalAddr as key because recovered signers are ETH addr 20 bytes
 pub struct Signers<'a>(
     Item<'a, SignersState>,
-    Item<'a, SignerPowers>
+    Item<'a, SignerPowers>,
+    &'a Owner<'a>
 );
 
 // this is the core business logic we expose
 impl<'a> Signers<'a> {
-    pub const fn new() -> Self {
+    pub const fn new(owner: &'a Owner) -> Self {
         // I don't know how to concat &str and literal in const fn so just hardcode within this fn
-        Signers(Item::new("signers_state"), Item::new("signers"))
+        Signers(Item::new("signers_state"), Item::new("signers"), owner)
     }
 
     /// only allow set once. if already set, fail
-    pub fn init_set(&self, store: &mut dyn Storage) -> StdResult<()> {
+    pub fn init_set(&self, store: &mut dyn Storage, caller: &Addr) -> Result<(), SignersError> {
+        // make sure Owner has already been set.
+        self.2.only_owner(store.deref(), caller)?;
         // storage has way to check if a key exists but it's hidden by Item.
         match self.0.may_load(store)? {
             // not found, ok to set
-            None => self.0.save(store, &SignersState{
+            None => Ok(self.0.save(store, &SignersState{
                 notice_period: 0,
                 reset_time: 0,
                 trigger_time: 0,
-            }),
+            })?),
             // found SignersState, return error
-            Some(_) => Err(StdError::generic_err("init_set called after state already set")),
+            Some(_) => Err(SignersError::Std(StdError::generic_err("init_set called after state already set"))),
         }
     }
 
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
     /// block_time is env.block.time.seconds();
-    pub fn reset_signers(&self, store: &mut dyn Storage, block_time: u64, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
-        let signer_state = &mut self.0.load(store)?;
+    pub fn reset_signers(&self, deps: DepsMut, info: MessageInfo, block_time: u64, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
+        let store = deps.storage;
+        // solidity modifier onlyOwner
+        self.2.only_owner(store.deref(), &info.sender)?;
+        let signer_state = &mut self.0.load(store.deref())?;
         if signer_state.reset_time >= block_time {
             return Err(SignersError::Std(StdError::generic_err("not reach reset time")));
         }
         signer_state.reset_time = u64::MAX;
         self.0.save(store, signer_state)?;
 
-        self._update_signers(store, signers, powers)
+        let resp = self._update_signers(store, signers, powers)?;
+        Ok(resp.add_attribute("method", "reset_signers"))
     }
 
     fn _update_signers(&self, store: &mut dyn Storage, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
@@ -107,8 +116,11 @@ impl<'a> Signers<'a> {
 
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
-    pub fn notify_reset_signers(&self, store: &mut dyn Storage, block_time: u64) -> Result<Response, SignersError> {
-        let signer_state = &mut self.0.load(store)?;
+    pub fn notify_reset_signers(&self, deps: DepsMut, info:MessageInfo, block_time: u64) -> Result<Response, SignersError> {
+        let store = deps.storage;
+        // solidity modifier onlyOwner
+        self.2.only_owner(store.deref(), &info.sender)?;
+        let signer_state = &mut self.0.load(store.deref())?;
         signer_state.reset_time = block_time + signer_state.notice_period;
         self.0.save(store, signer_state)?;
 
@@ -118,8 +130,11 @@ impl<'a> Signers<'a> {
     }
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
-    pub fn incr_notice_period(&self, store: &mut dyn Storage, new_period: u64) -> Result<Response, SignersError> {
-        let signer_state = &mut self.0.load(store)?;
+    pub fn incr_notice_period(&self, deps: DepsMut, info:MessageInfo, new_period: u64) -> Result<Response, SignersError> {
+        let store = deps.storage;
+        // solidity modifier onlyOwner
+        self.2.only_owner(store.deref(), &info.sender)?;
+        let signer_state = &mut self.0.load(store.deref())?;
         if signer_state.notice_period >= new_period {
             return Err(SignersError::Std(StdError::generic_err("notice period can only be increased")));
         }
@@ -130,7 +145,7 @@ impl<'a> Signers<'a> {
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
     /// contract_addr will be 12..32 of the hash of the addr
-    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[CanonicalAddr], new_powers: &[Uint128], sigs: &[&[u8]]) -> Result<Response, SignersError> {
+    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[CanonicalAddr], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
         if signer_state.trigger_time >= trigger_time {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
@@ -154,15 +169,15 @@ impl<'a> Signers<'a> {
 
         self.verify_sigs(deps.as_ref(), msg.as_slice(), sigs)?;
 
-        self._update_signers(deps.storage, new_signers, new_powers)?;
+        let resp = self._update_signers(deps.storage, new_signers, new_powers)?;
 
         signer_state.trigger_time = trigger_time;
         self.0.save(deps.storage, signer_state)?;
-        Ok(Response::new())
+        Ok(resp.add_attribute("method", "update_signers"))
     }
 
     /// verify msg is signed with enough power, msg will be keccak256(_msg).toEthSignedMessageHash() internally
-    pub fn verify_sigs(&self, deps: Deps, msg: &[u8], sigs: &[&[u8]]) -> Result<Response, SignersError> {
+    pub fn verify_sigs(&self, deps: Deps, msg: &[u8], sigs: &[Binary]) -> Result<Response, SignersError> {
         let hash = func::keccak256(msg);
         let hash: &mut [u8] = &mut hash.clone();
 
@@ -179,6 +194,10 @@ impl<'a> Signers<'a> {
         let quorum = total_power.mul(Uint128::from(2u128)).div(Uint128::from(3u128)).add(Uint128::from(1u128));
 
         let mut signed_power = Uint128::from(0u128);
+        let sigs_vec = sigs.to_vec();
+        let sigs: Vec<&[u8]> = sigs_vec.iter().map(
+            |s| s.as_slice()
+        ).collect();
         for sig in sigs {
             let signer = func::recover_signer(&eth_msg, sig)?;
             if let Some(power) = signer_powers.get(&signer) {
