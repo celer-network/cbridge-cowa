@@ -41,7 +41,12 @@ impl<'a> Owner<'a> {
     /// returns OwnerError::NotOwner if info.sender is not owner. we take info to avoid anyone
     /// pass in wrong Addr eg. from user msg
     pub fn assert_owner(&self, deps: Deps, info: &MessageInfo) -> Result<(), OwnerError> {
-        if !self.is_owner(deps, &info.sender)? {
+        self.only_owner(deps.storage, &info.sender)
+    }
+
+    /// modifier onlyOwner
+    pub fn only_owner(&self, store: &dyn Storage, candidat: &Addr) -> Result<(), OwnerError> {
+        if !(self.0.load(store)? == candidat.clone().into_string()) {
             Err(OwnerError::NotOwner {})
         } else {
             Ok(())

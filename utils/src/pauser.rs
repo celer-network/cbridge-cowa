@@ -27,28 +27,24 @@ pub enum PauserError {
     NotPaused {},
 }
 
-const OWNER_NAMESPACE: &str = "owner";
-const PAUSED_NAMESPACE: &str = "paused";
-const PAUSERS_NAMESPACE: &str = "pausers";
-
 pub struct Pauser<'a>{
-    pub owner: Owner<'a>,
+    owner: &'a Owner<'a>,
     paused: Item<'a, bool>,
     pausers: Map<'a, &'a Addr, bool>,
 }
 
-impl Pauser<'_> {
-    pub const fn new() -> Self {
+impl<'a> Pauser<'a> {
+    pub const fn new(paused_namespace: &'a str, pausers_namespace: &'a str, owner: &'a Owner) -> Self {
         Pauser{
-            owner: Owner::new(OWNER_NAMESPACE),
-            paused: Item::new(PAUSED_NAMESPACE),
-            pausers: Map::new(PAUSERS_NAMESPACE)
+            owner,
+            paused: Item::new(paused_namespace),
+            pausers: Map::new(pausers_namespace),
         }
     }
 
     /// as constructor in solidity, can only be called once
     pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response, PauserError> {
-        self.owner.init_set(store,caller)?;
+        self.owner.only_owner(store.deref(),caller)?;
         self.paused.save(store, &false)?;
         self.add_pauser(store, caller)
     }
@@ -168,9 +164,11 @@ mod tests {
     #[test]
     fn instantiate() {
         let mut deps = mock_dependencies(&[]);
-        let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
+        let owner = Owner::new("owner");
+        owner.init_set(deps.as_mut().storage, &owner_addr).unwrap();
+        let obj = Pauser::new("paused", "pausers", &owner);
         obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let got = obj.owner.get(deps.as_ref()).unwrap();
@@ -187,15 +185,17 @@ mod tests {
         assert_eq!(err, PauserError::NotPaused {});
         // try to call init_set again will cause err
         let err = obj.instantiate(deps.as_mut().storage, &owner_addr).unwrap_err();
-        assert_eq!(err, PauserError::Std(StdError::generic_err( "init_set called after owner already set")));
+        assert_eq!(err, PauserError::AlreadyPauser {});
     }
 
     #[test]
     fn pause_unpause() {
         let mut deps = mock_dependencies(&[]);
-        let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
+        let owner = Owner::new("owner");
+        owner.init_set(deps.as_mut().storage, &owner_addr).unwrap();
+        let obj = Pauser::new("paused", "pausers", &owner);
         obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let info = mock_info(anyone_addr.as_ref(), &[]);
@@ -220,9 +220,11 @@ mod tests {
     #[test]
     fn pausers() {
         let mut deps = mock_dependencies(&[]);
-        let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
+        let owner = Owner::new("owner");
+        owner.init_set(deps.as_mut().storage, &owner_addr).unwrap();
+        let obj = Pauser::new("paused", "pausers", &owner);
         obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let info = mock_info(anyone_addr.as_ref(), &[]);

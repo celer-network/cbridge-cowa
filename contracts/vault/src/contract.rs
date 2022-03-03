@@ -85,6 +85,8 @@ pub fn do_withdraw(
     pbmsg: Binary,
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage)?;
     let domain = func::get_domain(contract_addr.clone(), "Withdraw");
     let msg = abi::encode_packed(
             &[
@@ -185,6 +187,8 @@ pub fn do_deposit(
     contract_addr: Addr,
     wrapped: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage)?;
     let token = info.sender; // cw20 contract Addr
     let user = wrapped.sender; // user who called cw20.send
     let amount = wrapped.amount; // Uint128 amount
