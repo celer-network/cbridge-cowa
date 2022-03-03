@@ -1,6 +1,6 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
-use utils::owner::OwnerError;
+use utils::pauser::PauserError;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
@@ -10,9 +10,9 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    // OwnerError could happen from owner funcs
+    // PauserError could happen from pauser funcs
     #[error("{0}")]
-    Owner(#[from] OwnerError),
+    Owner(#[from] PauserError),
 
     #[error("{0}")]
     DecodeError(#[from] prost::DecodeError)

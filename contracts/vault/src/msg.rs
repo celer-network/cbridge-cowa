@@ -12,6 +12,21 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {    
     /// update contract owner, must be valid cosmwasm bech32 string
     UpdateOwner{ newowner: String },
+    /// add new pauser
+    /// only called by owner
+    AddPauser{newpauser: String},
+    /// remove pauser
+    /// only called by owner
+    RemovePauser{pauser: String},
+    /// renounce pauser
+    /// only called by a pauser
+    RenouncePauser{},
+    /// pause this contract
+    /// only called by a pauser
+    Pause{},
+    /// unpause this contract
+    /// only called by a pauser
+    Unpause{},
     /// update sig_checker contract addr as withdraw msg must come from it
     /// we can't use signers within vault because sgn only update signers
     /// in cbridge module and cbridge contract
@@ -42,6 +57,12 @@ pub struct DepositMsg { // user call cw20.send with this msg
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     GetConfig {}, // return owner, sig checker contract addr and other info, see GetConfigResp
+    // Return if this address is a pauser.
+    // Return type: bool
+    Pauser {address: String},
+    // Return if this contract is paused.
+    // Return type: bool
+    Paused {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

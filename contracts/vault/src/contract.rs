@@ -1,13 +1,15 @@
+use std::borrow::Borrow;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 use cw20::{Cw20ReceiveMsg};
+use utils::pauser::PauserError;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
 use crate::vault;
-use crate::state::{ State, STATE, OWNER};
+use crate::state::{State, STATE, OWNER, PAUSER};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:vault";
@@ -27,12 +29,10 @@ pub fn instantiate(
         sig_checker: msg.sig_checker.clone(),
     };
     STATE.save(deps.storage, &state)?;
-    // set init owner
-    OWNER.init_set(deps.storage, &info.sender.clone())?;
+    // instantiate pauser
+    let resp = PAUSER.instantiate(deps.storage, info.sender.borrow())?;
 
-    Ok(Response::new()
-        .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender)
+    Ok(resp.add_attribute("method", "instantiate")
         .add_attribute("sig_checker", msg.sig_checker))
 }
 
@@ -48,6 +48,17 @@ pub fn execute(
         ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
         // ONLY owner. update address for sig checker contract
         ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
+        // ONLY owner. add a new pauser.
+        ExecuteMsg::AddPauser {newpauser} => PAUSER.execute_add_pauser(deps, info, newpauser),
+        // ONLY owner. remove a pauser.
+        ExecuteMsg::RemovePauser {pauser} => PAUSER.execute_remove_pauser(deps, info, pauser),
+
+        // ONLY pauser. renounce pauser.
+        ExecuteMsg::RenouncePauser {} => PAUSER.execute_renounce_pauser(deps, info),
+        // ONLY pauser. pause this contract.
+        ExecuteMsg::Pause {} => PAUSER.execute_pause(deps, info),
+        // ONLY pauser. unpause this contract.
+        ExecuteMsg::Unpause {} => PAUSER.execute_unpause(deps, info),
         
         // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
         // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
@@ -122,6 +133,8 @@ pub fn do_deposit(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetConfig {} => to_binary(&get_config(deps)?),
+        QueryMsg::Pauser {address} => to_binary(&PAUSER.query_pauser(deps, address)?),
+        QueryMsg::Paused {} => to_binary(&PAUSER.query_paused(deps)?),
     }
 }
 

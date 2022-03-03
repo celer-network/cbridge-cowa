@@ -47,10 +47,10 @@ impl Pauser<'_> {
     }
 
     /// as constructor in solidity, can only be called once
-    pub fn instantiate(&self, deps: DepsMut, info: MessageInfo) -> Result<Response, PauserError> {
-        self.owner.init_set(deps.storage,&info.sender)?;
-        self.paused.save(deps.storage, &false)?;
-        self.add_pauser(deps.storage, &info.sender)
+    pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response, PauserError> {
+        self.owner.init_set(store,caller)?;
+        self.paused.save(store, &false)?;
+        self.add_pauser(store, caller)
     }
 
     //internal functions
@@ -171,8 +171,7 @@ mod tests {
         let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
-        let info = mock_info(owner_addr.as_ref(), &[]);
-        obj.instantiate(deps.as_mut(), info).expect("failed to instantiate");
+        obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let got = obj.owner.get(deps.as_ref()).unwrap();
         assert_eq!(got, "0x6F4A47e039328F95deC1919aA557E998774eD8dA");
@@ -187,8 +186,7 @@ mod tests {
         let err = obj.when_paused(deps.as_ref().storage).unwrap_err();
         assert_eq!(err, PauserError::NotPaused {});
         // try to call init_set again will cause err
-        let info = mock_info(owner_addr.as_ref(), &[]);
-        let err = obj.instantiate(deps.as_mut(), info).unwrap_err();
+        let err = obj.instantiate(deps.as_mut().storage, &owner_addr).unwrap_err();
         assert_eq!(err, PauserError::Std(StdError::generic_err( "init_set called after owner already set")));
     }
 
@@ -198,8 +196,7 @@ mod tests {
         let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
-        let info = mock_info(owner_addr.as_ref(), &[]);
-        obj.instantiate(deps.as_mut(), info).expect("failed to instantiate");
+        obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let info = mock_info(anyone_addr.as_ref(), &[]);
         let err = obj.execute_pause(deps.as_mut(), info).unwrap_err();
@@ -226,8 +223,7 @@ mod tests {
         let obj = Pauser::new();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let anyone_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
-        let info = mock_info(owner_addr.as_ref(), &[]);
-        obj.instantiate(deps.as_mut(), info).expect("failed to instantiate");
+        obj.instantiate(deps.as_mut().storage, &owner_addr).expect("failed to instantiate");
 
         let info = mock_info(anyone_addr.as_ref(), &[]);
         let err = obj.execute_add_pauser(deps.as_mut(), info, anyone_addr.as_ref().to_string()).unwrap_err();
