@@ -12,7 +12,7 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
 use crate::vault;
 
-use crate::state::{ State, STATE, OWNER, PAUSER, WD_IDS};
+use crate::state::{ State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT};
 
 use utils::{abi, func};
 
@@ -53,22 +53,26 @@ pub fn execute(
         ExecuteMsg::UpdateOwner { newowner } => Ok(PAUSER.owner.update_owner(deps, info, &newowner)?),
         // ONLY owner. update address for sig checker contract
         ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
+
         // ONLY owner. add a new pauser.
-        ExecuteMsg::AddPauser {newpauser} => PAUSER.execute_add_pauser(deps, info, newpauser),
+        ExecuteMsg::AddPauser {newpauser} => Ok(PAUSER.execute_add_pauser(deps, info, newpauser)?),
         // ONLY owner. remove a pauser.
-        ExecuteMsg::RemovePauser {pauser} => PAUSER.execute_remove_pauser(deps, info, pauser),
+        ExecuteMsg::RemovePauser {pauser} => Ok(PAUSER.execute_remove_pauser(deps, info, pauser)?),
 
         // ONLY pauser. renounce pauser.
-        ExecuteMsg::RenouncePauser {} => PAUSER.execute_renounce_pauser(deps, info),
+        ExecuteMsg::RenouncePauser {} => Ok(PAUSER.execute_renounce_pauser(deps, info)?),
         // ONLY pauser. pause this contract.
-        ExecuteMsg::Pause {} => PAUSER.execute_pause(deps, info),
+        ExecuteMsg::Pause {} => Ok(PAUSER.execute_pause(deps, info)?),
         // ONLY pauser. unpause this contract.
-        ExecuteMsg::Unpause {} => PAUSER.execute_unpause(deps, info),
+        ExecuteMsg::Unpause {} => Ok(PAUSER.execute_unpause(deps, info)?),
+
+        ExecuteMsg::UpdateMinDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, true),
+        ExecuteMsg::UpdateMaxDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, false),
         
         // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
         // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
         // what about deposit id collision? same issue exists in solidity
-        ExecuteMsg::Receive(msg) => do_deposit(deps, info, msg),
+        ExecuteMsg::Receive(msg) => do_deposit(deps, info, env.contract.address, msg),
 
         // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
         ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env.contract.address, pbmsg, sigs),
@@ -152,28 +156,77 @@ pub fn update_sigchecker(
         .add_attribute("newaddr", newaddr))
 }
 
+pub fn update_deposit_amt_setting(
+    deps: DepsMut,
+    info: MessageInfo,
+    token_addr: &str,
+    amount: u128,
+    is_min: bool,
+) -> Result<Response, ContractError> {
+    // must called by owner
+    PAUSER.owner.assert_owner(deps.as_ref(), &info)?;
+    // make sure token is valid
+    let valid_addr = deps.api.addr_validate(token_addr)?;
+    if is_min {
+        MIN_DEPOSIT.save(deps.storage, valid_addr, &amount)?;
+    } else {
+        MAX_DEPOSIT.save(deps.storage, valid_addr, &amount)?;
+    }
+
+    Ok(Response::new()
+        .add_attribute("action", "update_".to_owned() + if is_min { "min" } else { "max" } + "_deposit")
+        .add_attribute("token", token_addr)
+        .add_attribute("amount", amount.to_string()))
+}
+
 pub fn do_deposit(
     deps: DepsMut,
     info: MessageInfo,
+    contract_addr: Addr,
     wrapped: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     let token = info.sender; // cw20 contract Addr
     let user = wrapped.sender; // user who called cw20.send
     let amount = wrapped.amount; // Uint128 amount
 
-    let msg: DepositMsg = from_binary(&wrapped.msg)?;
-    // check per token deposit min/max, return err if violate
-    // calculate depositId
-    // check if depositId exists, return err if found
-    // save new depositId
+    let min = MIN_DEPOSIT.may_load(deps.storage, token.clone())?;
+    if let Some(min) = min {
+        if amount.u128() <= min {
+            return Err(ContractError::Std(StdError::generic_err("amount too small")));
+        }
+    }
+    let max = MAX_DEPOSIT.may_load(deps.storage, token.clone())?;
+    if let Some(max) = max {
+        if amount.u128() > max {
+            return Err(ContractError::Std(StdError::generic_err("amount too large")));
+        }
+    }
+
+    let dep_msg: DepositMsg = from_binary(&wrapped.msg)?;
+    let dep_id = func::keccak256(&abi::encode_packed(
+        &[
+            abi::SolType::Str(&user),
+            abi::SolType::Bytes(token.as_bytes()),
+            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&dep_msg.dst_chid.to_be_bytes()),
+            abi::SolType::Str(&dep_msg.mint_acnt),
+            abi::SolType::Bytes(&dep_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
+            abi::SolType::Bytes(contract_addr.as_bytes())
+        ]));
+    if DEP_IDS.has(deps.storage, dep_id.clone()) {
+        return Err(ContractError::Std(StdError::generic_err("record exists")));
+    }
+    DEP_IDS.save(deps.storage, dep_id.clone(), &true)?;
+
     let res = Response::new()
         .add_attribute("action", "deposit")
-        .add_attribute("depid", "") // calculated depid
+        .add_attribute("depid", hex::encode(dep_id))
         .add_attribute("from", user)
         .add_attribute("token", token)
         .add_attribute("amount", amount)
-        .add_attribute("dst_chid", msg.dst_chid.to_string())
-        .add_attribute("mint_", msg.mint_acnt);
+        .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
+        .add_attribute("mint_acct", dep_msg.mint_acnt);
     Ok(res)
 }
 

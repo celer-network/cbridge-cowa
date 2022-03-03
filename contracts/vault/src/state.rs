@@ -16,6 +16,7 @@ pub struct State {
 }
 
 pub const STATE: Item<State> = Item::new("state");
+
 /*
     Pauser {
         Owner,   // default storage_key is "owner"
@@ -24,4 +25,9 @@ pub const STATE: Item<State> = Item::new("state");
     }
  */
 pub const PAUSER: Pauser = Pauser::new();
+
+pub const DEP_IDS: Map<Vec<u8>, bool> = Map::new("dep_ids");
 pub const WD_IDS: Map<Vec<u8>, bool> = Map::new("wd_ids");
+
+pub const MIN_DEPOSIT: Map<Addr, u128> = Map::new("min_deposit");
+pub const MAX_DEPOSIT: Map<Addr, u128> = Map::new("max_deposit");

@@ -33,6 +33,10 @@ pub enum ExecuteMsg {
     /// must be valid cosmwasm bech32 string
     UpdateSigChecker{ newaddr: String },
 
+    UpdateMinDeposit{ token_addr: String, amount: u128 },
+
+    UpdateMaxDeposit{ token_addr: String, amount: u128 },
+
     /// withdraw from user, vault contract will query sig_checker to verify sigs
     /// unlike solidity, no need to send current signers and their powers
     Withdraw {
