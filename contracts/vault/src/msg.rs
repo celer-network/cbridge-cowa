@@ -37,6 +37,8 @@ pub enum ExecuteMsg {
 
     UpdateMaxDeposit{ token_addr: String, amount: u128 },
 
+    UpdateNativeTokens { native_tokens: Vec<NativeToken> },
+
     /// withdraw from user, vault contract will query sig_checker to verify sigs
     /// unlike solidity, no need to send current signers and their powers
     Withdraw {
@@ -47,6 +49,8 @@ pub enum ExecuteMsg {
     /// to be called by cw20 token contract for user deposit
     /// Cw20ReceiveMsg.msg is Deposit
     Receive(cw20::Cw20ReceiveMsg),
+
+    DepositNative(DepositMsg),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -74,4 +78,11 @@ pub enum QueryMsg {
 pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct NativeToken {
+    pub denom: String,
+    pub mapped_addr: Addr,
 }

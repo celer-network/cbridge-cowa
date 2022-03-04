@@ -5,13 +5,15 @@ use serde::{Deserialize, Serialize};
 use utils::owner::Owner;
 pub const OWNER: Owner = Owner::new("owner"); // save Item under key: owner
 
-use cosmwasm_std::Addr;
+use cosmwasm_std::{Addr};
 use utils::pauser::Pauser;
 use cw_storage_plus::{ Item, Map };
+use crate::msg::NativeToken;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub sig_checker: Addr, // contract address that validates sigs
+    pub native_tokens: Vec<NativeToken>,
 }
 
 pub const STATE: Item<State> = Item::new("state");

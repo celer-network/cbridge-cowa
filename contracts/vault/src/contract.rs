@@ -2,13 +2,14 @@ use std::convert::TryInto;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128};
+use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, 
+    Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, CanonicalAddr, BankMsg, coin};
 use cw2::set_contract_version;
 
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken};
 use crate::vault;
 
 use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER};
@@ -31,6 +32,7 @@ pub fn instantiate(
     // set state eg. sig_checker, if more cfg is needed, add to InstantiateMsg and State
     let state = State {
         sig_checker: msg.sig_checker.clone(),
+        native_tokens: vec![],
     };
     STATE.save(deps.storage, &state)?;
     // init owner
@@ -70,11 +72,16 @@ pub fn execute(
 
         ExecuteMsg::UpdateMinDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, true),
         ExecuteMsg::UpdateMaxDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, false),
+
+        ExecuteMsg::UpdateNativeTokens { native_tokens } => update_native_tokens(deps, info, native_tokens),
         
         // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
         // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
         // what about deposit id collision? same issue exists in solidity
         ExecuteMsg::Receive(msg) => do_deposit(deps, info, env.contract.address, msg),
+
+        // Deposit native token, e.g., LUNA and UST
+        ExecuteMsg::DepositNative(msg) => do_deposit_native(deps, info, env.contract.address, msg),
 
         // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
         ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env.contract.address, pbmsg, sigs),
@@ -118,15 +125,28 @@ pub fn do_withdraw(
     }
     WD_IDS.save(deps.storage, wd_id.clone(), &true)?;
 
-    // TODO: impl native token support
-    let send_token_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: hex::encode(&withdraw.token),
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: hex::encode(&withdraw.receiver), 
-            amount: Uint128::from(u128::from_be_bytes(withdraw.amount.clone().try_into().unwrap())),
-        })?,
-        funds: vec![],
-    });
+    let token = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.token.clone())).unwrap();
+    let receiver = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.receiver.clone())).unwrap();
+    let amount = u128::from_be_bytes(withdraw.amount.clone().try_into().unwrap());
+    let send_token_msg: CosmosMsg;
+
+    if let Ok(i) = state.native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
+        // native token
+        send_token_msg = CosmosMsg::Bank(BankMsg::Send {
+            to_address: receiver.into_string(),
+            amount: vec![coin(amount, &state.native_tokens[i].denom)],
+        });
+    } else {
+        // cw20 token
+        send_token_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: token.into_string(),
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: receiver.into_string(), 
+                amount: Uint128::from(amount),
+            })?,
+            funds: vec![],
+        });
+    }
 
     let res = Response::new()
         .add_attribute("action", "mint")
@@ -183,6 +203,24 @@ pub fn update_deposit_amt_setting(
         .add_attribute("amount", amount.to_string()))
 }
 
+pub fn update_native_tokens(
+    deps: DepsMut,
+    info: MessageInfo,
+    native_tokens: Vec<NativeToken>,
+) -> Result<Response, ContractError> {
+    // must called by owner
+    OWNER.assert_owner(deps.as_ref(), &info)?;
+    
+    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+        state.native_tokens = native_tokens.clone();
+        Ok(state)
+    })?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_native_tokens")
+        .add_attribute("native_tokens", serde_json_wasm::to_string(&native_tokens).unwrap()))
+}
+
 pub fn do_deposit(
     deps: DepsMut,
     info: MessageInfo,
@@ -228,8 +266,74 @@ pub fn do_deposit(
     let res = Response::new()
         .add_attribute("action", "deposit")
         .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", user)
-        .add_attribute("token", token)
+        .add_attribute("from", deps.api.addr_canonicalize(&user).unwrap().to_string())
+        .add_attribute("token", deps.api.addr_canonicalize(token.as_str()).unwrap().to_string())
+        .add_attribute("amount", amount)
+        .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
+        .add_attribute("mint_acct", dep_msg.mint_acnt);
+    Ok(res)
+}
+
+pub fn do_deposit_native(
+    deps: DepsMut,
+    info: MessageInfo,
+    contract_addr: Addr,
+    dep_msg: DepositMsg,
+) -> Result<Response, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage)?;
+
+    let tokens = info.funds;
+    if tokens.len() != 1 {
+        return Err(ContractError::Std(StdError::generic_err("one token type per deposit only")));
+    }
+
+    let token_denom = &tokens[0].denom;
+    let amount = tokens[0].amount;
+    let user = info.sender.into_string();
+    let state = STATE.load(deps.storage)?;
+    let token: Addr;
+
+    if let Ok(i) = state.native_tokens.binary_search_by_key(token_denom, |n| n.denom.clone()) {
+        token = state.native_tokens[i].mapped_addr.clone();
+    } else {
+        return Err(ContractError::Std(StdError::generic_err("not supported token")));
+    }
+
+    let min = MIN_DEPOSIT.may_load(deps.storage, token.clone())?;
+    if let Some(min) = min {
+        if amount.u128() <= min {
+            return Err(ContractError::Std(StdError::generic_err("amount too small")));
+        }
+    }
+    let max = MAX_DEPOSIT.may_load(deps.storage, token.clone())?;
+    if let Some(max) = max {
+        if amount.u128() > max {
+            return Err(ContractError::Std(StdError::generic_err("amount too large")));
+        }
+    }
+
+    let dep_id = func::keccak256(&abi::encode_packed(
+        &[
+            abi::SolType::Str(&user),
+            abi::SolType::Bytes(token.as_bytes()),
+            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&dep_msg.dst_chid.to_be_bytes()),
+            abi::SolType::Str(&dep_msg.mint_acnt),
+            abi::SolType::Bytes(&dep_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
+            abi::SolType::Bytes(contract_addr.as_bytes())
+        ]));
+    if DEP_IDS.has(deps.storage, dep_id.clone()) {
+        return Err(ContractError::Std(StdError::generic_err("record exists")));
+    }
+    DEP_IDS.save(deps.storage, dep_id.clone(), &true)?;
+
+    let res = Response::new()
+        .add_attribute("action", "deposit")
+        .add_attribute("depid", hex::encode(dep_id))
+        .add_attribute("from", deps.api.addr_canonicalize(&user).unwrap().to_string())
+        .add_attribute("token", deps.api.addr_canonicalize(token.as_str()).unwrap().to_string())
         .add_attribute("amount", amount)
         .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
         .add_attribute("mint_acct", dep_msg.mint_acnt);
