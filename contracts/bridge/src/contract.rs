@@ -43,21 +43,6 @@ pub fn execute(
     }
 }
 
-// pub fn reset_signers(deps: DepsMut, block_time: u64, info: MessageInfo, signers: Vec<CanonicalAddr>, powers: Vec<Uint128>) -> Result<Response, ContractError> {
-//     // must called by owner
-//     OWNER.assert_owner(deps.as_ref(), &info)?;
-//     SIGNERS.reset_signers(deps.storage, block_time, signers.as_slice(), powers.as_slice())?;
-//     Ok(Response::new().add_attribute("method", "reset_signers"))
-// }
-
-// pub fn update_signers(deps: DepsMut, trigger_time: u64, contract_addr: Addr, signers: Vec<CanonicalAddr>, powers: Vec<Uint128>, sigs: Vec<Binary>) -> Result<Response, ContractError> {
-//     let sigs: Vec<&[u8]> = sigs.iter().map(
-//         |s| s.as_slice()
-//     ).collect();
-//     SIGNERS.update_signers(deps, trigger_time, contract_addr, signers.as_slice(), powers.as_slice(), sigs.as_slice())?;
-//     Ok(Response::new().add_attribute("method", "update_signers"))
-// }
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
