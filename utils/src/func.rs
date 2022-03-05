@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use cosmwasm_std::{Addr, CanonicalAddr};
+use cosmwasm_std::{CanonicalAddr};
 use cosmwasm_crypto::secp256k1_recover_pubkey;
 use cosmwasm_crypto::CryptoError;
 
@@ -42,14 +42,11 @@ fn read_hash(data: &[u8]) -> Result<[u8; 32], CryptoError> {
     data.try_into().map_err(|_| CryptoError::InvalidHashFormat {})
 }
 
-pub fn get_domain(contract_addr: Addr, method: &str) -> Vec<u8> {
-    let contract_addr = keccak256(contract_addr.as_bytes());
-    let contract_addr = contract_addr[12..32].try_into().unwrap(); //convert contract addr to 20 bytes addr, align with sgnd
-
+pub fn get_domain(contract_addr: CanonicalAddr, method: &str) -> Vec<u8> {
     keccak256(&abi::encode_packed(
         &[
             abi::SolType::Uint256(&cosmwasm_std::Uint256::from(abi::CHAIN_ID).to_be_bytes()), 
-            abi::SolType::Addr(contract_addr),
+            abi::SolType::Addr(contract_addr.as_slice()[0..20].try_into().unwrap()),
             abi::SolType::Str(method)
         ]))
 }

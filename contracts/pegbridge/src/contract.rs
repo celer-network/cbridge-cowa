@@ -64,7 +64,7 @@ pub fn do_mint(
     pbmsg: Binary,
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
-    let domain = func::get_domain(contract_addr.clone(), "Mint");
+    let domain = func::get_domain(deps.api.addr_canonicalize(contract_addr.as_str()).unwrap(), "Mint");
     let msg = abi::encode_packed(
             &[
                 abi::SolType::Bytes(&domain), 

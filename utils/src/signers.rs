@@ -151,7 +151,7 @@ impl<'a> Signers<'a> {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
         }
 
-        let domain = func::get_domain(contract_addr, "UpdateSigners");
+        let domain = func::get_domain(deps.api.addr_canonicalize(contract_addr.as_str()).unwrap(), "UpdateSigners");
         let msg = abi::encode_packed(
                 &[
                     abi::SolType::Bytes(&domain), 

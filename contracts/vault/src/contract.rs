@@ -96,7 +96,7 @@ pub fn do_withdraw(
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
-    let domain = func::get_domain(contract_addr.clone(), "Withdraw");
+    let domain = func::get_domain(deps.api.addr_canonicalize(contract_addr.as_str()).unwrap(), "Withdraw");
     let msg = abi::encode_packed(
             &[
                 abi::SolType::Bytes(&domain), 
