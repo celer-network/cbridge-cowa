@@ -51,10 +51,6 @@ impl<'a> Pauser<'a> {
     }
 
     //internal functions
-    fn is_pauser(&self, store: &dyn Storage, candidat: &Addr) -> bool {
-        self.pausers.has(store, candidat)
-    }
-
     fn is_paused(&self, store: &dyn Storage) -> StdResult<bool> {
         self.paused.load(store)
     }
@@ -101,6 +97,11 @@ impl<'a> Pauser<'a> {
         } else {
             Err(PauserError::NotPaused {})
         }
+    }
+
+    //utils
+    pub fn is_pauser(&self, store: &dyn Storage, candidat: &Addr) -> bool {
+        self.pausers.has(store, candidat)
     }
 
     //query
