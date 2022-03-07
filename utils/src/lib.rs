@@ -5,3 +5,4 @@ pub mod signers;
 pub mod pauser;
 pub mod governor;
 pub mod delayed_transfer;
+pub mod volume_control;
