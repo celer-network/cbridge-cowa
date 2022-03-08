@@ -149,7 +149,7 @@ pub fn do_withdraw(
     }
 
     let res = Response::new()
-        .add_attribute("action", "mint")
+        .add_attribute("action", "withdraw")
         .add_attribute("wd_id", hex::encode(wd_id))
         .add_attribute("receiver", hex::encode(withdraw.receiver))
         .add_attribute("token", hex::encode(withdraw.token))
