@@ -88,8 +88,8 @@ impl<'a> DelayedTransfer<'a> {
             timestamp: block_time
         };
         self.delayed_transfers.save(store, id.to_vec(), &dt)?;
-        Ok(Response::new().add_attribute("action", "add_delayed_transfer")
-            .add_attribute("id", hex::encode(id)))
+        Ok(Response::new().add_attribute("delayed_transfer_action", "add_delayed_transfer")
+            .add_attribute("delayed_transfer_id", hex::encode(id)))
     }
 
     /// execute delayed transfer by its id, and return the delayed transfer as well
@@ -103,11 +103,11 @@ impl<'a> DelayedTransfer<'a> {
         }
         self.delayed_transfers.remove(store, id.to_vec());
         Ok((
-            Response::new().add_attribute("action", "execute_delayed_transfer")
-                .add_attribute("id", hex::encode(id))
-                .add_attribute("receiver", &dt.receiver)
-                .add_attribute("token", &dt.token)
-                .add_attribute("amount", dt.amount.to_string()),
+            Response::new().add_attribute("delayed_transfer_action", "execute_delayed_transfer")
+                .add_attribute("delayed_transfer_id", hex::encode(id))
+                .add_attribute("delayed_transfer_receiver", &dt.receiver)
+                .add_attribute("delayed_transfer_token", &dt.token)
+                .add_attribute("delayed_transfer_amount", dt.amount.to_string()),
             dt,
         ))
     }
@@ -140,6 +140,9 @@ impl<'a> DelayedTransfer<'a> {
         let mut resp = Response::new().add_attribute("action", "set_delay_thresholds");
         for i in 0..tokens.len() {
             let token_addr = deps.api.addr_validate(&tokens[i])?;
+            if thresholds[i].clone() == Uint256::zero() {
+                return Err(DelayedTransferError::InvalidInputs {})
+            }
             self.delay_thresholds.save(deps.storage, &token_addr, &thresholds[i])?;
             resp = resp.add_attribute(token_addr,thresholds[i]);
         }
@@ -149,6 +152,9 @@ impl<'a> DelayedTransfer<'a> {
     /// set delay period
     pub fn execute_set_delay_period(&self, deps: DepsMut, info: MessageInfo, period: u64) -> Result<Response, DelayedTransferError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
+        if period == 0 {
+            return Err(DelayedTransferError::InvalidInputs {})
+        }
         self.delay_period.save(deps.storage, &period)?;
         Ok(Response::new().add_attribute("action", "set_delay_period")
             .add_attribute("delay_period", period.to_string()))
@@ -227,7 +233,7 @@ mod tests {
             &token,
             &Uint256::from(666 as u64),
         ).unwrap();
-        assert_eq!(resp.attributes.contains(&Attribute::new("id", hex::encode(vec![10 as u8, 11 as u8, 12 as u8]))), true);
+        assert_eq!(resp.attributes.contains(&Attribute::new("delayed_transfer_id", hex::encode(vec![10 as u8, 11 as u8, 12 as u8]))), true);
         assert_eq!(resp.attributes.len(), 2);
 
         let (resp, dt) = obj.execute_delayed_transfer(deps.as_mut().storage, 3000, vec![10 as u8, 11 as u8, 12 as u8].as_ref()).unwrap();

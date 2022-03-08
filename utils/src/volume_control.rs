@@ -77,7 +77,7 @@ impl<'a> VolumeControl<'a> {
     }
 
     /// update volume
-    pub fn update_volume(&self, store: &mut dyn Storage, block_time: u64, token: &Addr, amount: &Uint256) -> Result<Response, VolumeControlError> {
+    pub fn update_volume(&self, store: &mut dyn Storage, block_time: u64, token: &Addr, amount: &Uint256) -> Result<(), VolumeControlError> {
         let epoch_length = self.get_epoch_length(store)?;
         let volume_cap = self.get_epoch_volume_cap(store, token)?;
         let mut volume = self.get_epoch_volume(store, token)?;
@@ -93,7 +93,7 @@ impl<'a> VolumeControl<'a> {
         }
         self.epoch_volumes.save(store, token, &volume)?;
         self.last_op_timestamps.save(store, token, &block_time)?;
-        Ok(Response::new().add_attribute("action", "update_volume"))
+        Ok(())
     }
 
     //external functions
@@ -219,14 +219,12 @@ mod tests {
         let token = deps.api.addr_validate("1234").unwrap();
         let volume = obj.get_epoch_volume(deps.as_ref().storage, &token).unwrap();
         assert_eq!(volume, Uint256::zero());
-        let resp = obj.update_volume(
+        obj.update_volume(
             deps.as_mut().storage,
             110,
             &token,
             &Uint256::from(222 as u64),
         ).unwrap();
-        assert_eq!(resp.attributes.contains(&Attribute::new("action", "update_volume")), true);
-        assert_eq!(resp.attributes.len(), 1);
         let volume = obj.get_epoch_volume(deps.as_ref().storage, &token).unwrap();
         assert_eq!(volume, Uint256::from(222 as u64));
         obj.update_volume(

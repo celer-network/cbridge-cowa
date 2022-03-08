@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr,Binary};
+use cosmwasm_std::{Addr, Binary, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,10 +11,10 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {    
     /// update contract owner, must be valid cosmwasm bech32 string
-    UpdateOwner{ newowner: String },
+    UpdateOwner{ new_owner: String },
     /// add new pauser
     /// only called by owner
-    AddPauser{newpauser: String},
+    AddPauser{new_pauser: String},
     /// remove pauser
     /// only called by owner
     RemovePauser{pauser: String},
@@ -27,6 +27,28 @@ pub enum ExecuteMsg {
     /// unpause this contract
     /// only called by a pauser
     Unpause{},
+    /// add new governor
+    /// only called by owner
+    AddGovernor{new_governor: String},
+    /// remove governor
+    /// only called by owner
+    RemoveGovernor{governor: String},
+    /// renounce governor
+    /// only called by a governor
+    RenounceGovernor{},
+    /// set delay thresholds
+    /// only called by a governor
+    SetDelayThresholds{tokens: Vec<String>, thresholds: Vec<Uint256>},
+    /// set delay period
+    /// only called by a governor
+    SetDelayPeriod{period: u64},
+    /// set epoch volume caps
+    /// only called by a governor
+    SetEpochVolumeCaps{tokens: Vec<String>, caps: Vec<Uint256>},
+    /// set epoch length
+    /// only called by a governor
+    SetEpochLength{length: u64},
+
     /// update sig_checker contract addr as withdraw msg must come from it
     /// we can't use signers within vault because sgn only update signers
     /// in cbridge module and cbridge contract
@@ -71,6 +93,30 @@ pub enum QueryMsg {
     // Return if this contract is paused.
     // Return type: bool
     Paused {},
+    // Return if this address is a governor.
+    // Return type: bool
+    Governor {address: String},
+    // Return the delay period.
+    // Return type: u64
+    DelayPeriod {},
+    // Return a token's delay threshold.
+    // Return type: Uint256
+    DelayThreshold {token: String},
+    // Return the delayed transfer by its id.
+    // Return type: DelayedTransfer::DelayedXfer
+    DelayedTransfer {id: Vec<u8>},
+    // Return the epoch length
+    // Return type: u64
+    EpochLength {},
+    // Return a token's epoch volume.
+    // Return type: Uint256
+    EpochVolume {token: String},
+    // Return a token's epoch volume cap.
+    // Return type: Uint256
+    EpochVolumeCap {token: String},
+    // Return a token's last operation timestamp.
+    // Return type: u64
+    LastOpTimestamp {token: String},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

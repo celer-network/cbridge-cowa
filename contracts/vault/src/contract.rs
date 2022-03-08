@@ -1,9 +1,9 @@
 use std::convert::TryInto;
+use std::ops::Deref;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, 
-    Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, CanonicalAddr, BankMsg, coin};
+use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, CanonicalAddr, BankMsg, coin, Uint256};
 use cw2::set_contract_version;
 
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
@@ -12,7 +12,7 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken};
 use crate::vault;
 
-use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER};
+use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL};
 
 use utils::{abi, func};
 
@@ -37,12 +37,18 @@ pub fn instantiate(
     STATE.save(deps.storage, &state)?;
     // init owner
     OWNER.init_set(deps.storage, &info.sender)?;
+    // instantiate governor
+    let resp_governor = GOVERNOR.instantiate(deps.storage, &info.sender)?;
     // instantiate pauser
-    let resp = PAUSER.instantiate(deps.storage, &info.sender)?;
+    let resp_pauser = PAUSER.instantiate(deps.storage, &info.sender)?;
 
+    let resp = Response::new();
     Ok(resp.add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender)
-        .add_attribute("sig_checker", msg.sig_checker))
+        .add_attribute("sig_checker", msg.sig_checker)
+        .add_attributes(resp_pauser.attributes)
+        .add_attributes(resp_governor.attributes)
+    )
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -54,21 +60,37 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         // ONLY owner. set new owner, execute_update_owner checks info.sender equals saved owner
-        ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
+        ExecuteMsg::UpdateOwner { new_owner } => Ok(OWNER.update_owner(deps, info, &new_owner)?),
         // ONLY owner. update address for sig checker contract
         ExecuteMsg::UpdateSigChecker { newaddr } => update_sigchecker(deps, info, &newaddr),
 
         // ONLY owner. add a new pauser.
-        ExecuteMsg::AddPauser {newpauser} => Ok(PAUSER.execute_add_pauser(deps, info, newpauser)?),
+        ExecuteMsg::AddPauser {new_pauser} => Ok(PAUSER.execute_add_pauser(deps, info, new_pauser)?),
         // ONLY owner. remove a pauser.
         ExecuteMsg::RemovePauser {pauser} => Ok(PAUSER.execute_remove_pauser(deps, info, pauser)?),
-
         // ONLY pauser. renounce pauser.
         ExecuteMsg::RenouncePauser {} => Ok(PAUSER.execute_renounce_pauser(deps, info)?),
         // ONLY pauser. pause this contract.
         ExecuteMsg::Pause {} => Ok(PAUSER.execute_pause(deps, info)?),
         // ONLY pauser. unpause this contract.
         ExecuteMsg::Unpause {} => Ok(PAUSER.execute_unpause(deps, info)?),
+
+        // ONLY owner. add a new governor.
+        ExecuteMsg::AddGovernor {new_governor} => Ok(GOVERNOR.execute_add_governor(deps, info, new_governor)?),
+        // ONLY owner. remove a governor.
+        ExecuteMsg::RemoveGovernor {governor} => Ok(GOVERNOR.execute_remove_governor(deps, info, governor)?),
+        // ONLY governor. renounce governor.
+        ExecuteMsg::RenounceGovernor {} => Ok(GOVERNOR.execute_renounce_governor(deps, info)?),
+        // ONLY governor. set delay thresholds.
+        ExecuteMsg::SetDelayThresholds {tokens, thresholds} => Ok(DELAYED_TRANSFER.execute_set_delay_thresholds(deps, info, tokens, thresholds)?),
+        // ONLY governor. set delay period.
+        ExecuteMsg::SetDelayPeriod {period} => Ok(DELAYED_TRANSFER.execute_set_delay_period(deps, info, period)?),
+        // ONLY governor. set epoch volume caps.
+        ExecuteMsg::SetEpochVolumeCaps {tokens, caps} => Ok(VOLUME_CONTROL.execute_set_epoch_volume_caps(deps, info, tokens, caps)?),
+        // ONLY governor. set epoch length.
+        ExecuteMsg::SetEpochLength {length} => Ok(VOLUME_CONTROL.execute_set_epoch_length(deps, info, length)?),
+
+
 
         ExecuteMsg::UpdateMinDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, true),
         ExecuteMsg::UpdateMaxDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, false),
@@ -84,18 +106,19 @@ pub fn execute(
         ExecuteMsg::DepositNative(msg) => do_deposit_native(deps, info, env.contract.address, msg),
 
         // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
-        ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env.contract.address, pbmsg, sigs),
+        ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env, pbmsg, sigs),
     }
 }
 
 pub fn do_withdraw(
     deps: DepsMut,
-    contract_addr: Addr,
+    env: Env,
     pbmsg: Binary,
     sigs: Vec<Binary>,
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
+    let contract_addr = env.contract.address;
     let domain = func::get_domain(deps.api.addr_canonicalize(contract_addr.as_str()).unwrap(), "Withdraw");
     let msg = abi::encode_packed(
             &[
@@ -128,36 +151,53 @@ pub fn do_withdraw(
     let token = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.token.clone())).unwrap();
     let receiver = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.receiver.clone())).unwrap();
     let amount = u128::from_be_bytes(withdraw.amount.clone().try_into().unwrap());
-    let send_token_msg: CosmosMsg;
 
-    if let Ok(i) = state.native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
-        // native token
-        send_token_msg = CosmosMsg::Bank(BankMsg::Send {
-            to_address: receiver.into_string(),
-            amount: vec![coin(amount, &state.native_tokens[i].denom)],
-        });
-    } else {
-        // cw20 token
-        send_token_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: token.into_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                recipient: receiver.into_string(), 
-                amount: Uint128::from(amount),
-            })?,
-            funds: vec![],
-        });
-    }
-
-    let res = Response::new()
+    let mut res = Response::new()
         .add_attribute("action", "withdraw")
-        .add_attribute("wd_id", hex::encode(wd_id))
+        .add_attribute("wd_id", hex::encode(wd_id.clone()))
         .add_attribute("receiver", hex::encode(withdraw.receiver))
         .add_attribute("token", hex::encode(withdraw.token))
         .add_attribute("amount", hex::encode(withdraw.amount))
         .add_attribute("ref_chain_id", withdraw.ref_chain_id.to_string())
         .add_attribute("ref_id", hex::encode(withdraw.ref_id))
-        .add_attribute("burn_acct", hex::encode(withdraw.burn_account))
-        .add_message(send_token_msg);
+        .add_attribute("burn_acct", hex::encode(withdraw.burn_account));
+
+    VOLUME_CONTROL.update_volume(deps.storage, env.block.time.seconds(), &token, &Uint256::from(amount))?;
+    let delay_threshold = DELAYED_TRANSFER.get_delay_threshold(deps.storage.deref(), &token)?;
+    if Uint256::from(amount) > delay_threshold {
+        // delay transfer
+        let resp_delayed_transfer = DELAYED_TRANSFER.add_delayed_transfer(
+            deps.storage,
+            env.block.time.seconds(),
+            wd_id.as_ref(),
+            &receiver,
+            &token,
+            &Uint256::from(amount),
+        )?;
+        res = res.add_attributes(resp_delayed_transfer.attributes);
+    } else {
+        // send token
+        let send_token_msg: CosmosMsg;
+        if let Ok(i) = state.native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
+            // native token
+            send_token_msg = CosmosMsg::Bank(BankMsg::Send {
+                to_address: receiver.into_string(),
+                amount: vec![coin(amount, &state.native_tokens[i].denom)],
+            });
+        } else {
+            // cw20 token
+            send_token_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: token.into_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: receiver.into_string(),
+                    amount: Uint128::from(amount),
+                })?,
+                funds: vec![],
+            });
+        }
+        res = res.add_message(send_token_msg);
+    }
+
     Ok(res)
 }
 
@@ -346,6 +386,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetConfig {} => to_binary(&get_config(deps)?),
         QueryMsg::Pauser {address} => to_binary(&PAUSER.query_pauser(deps, address)?),
         QueryMsg::Paused {} => to_binary(&PAUSER.query_paused(deps)?),
+        QueryMsg::Governor {address} => to_binary(&GOVERNOR.query_governor(deps, address)?),
+        QueryMsg::DelayPeriod {} => to_binary(&DELAYED_TRANSFER.query_delay_period(deps)?),
+        QueryMsg::DelayThreshold {token} => to_binary(&DELAYED_TRANSFER.query_delay_threshold(deps, token)?),
+        QueryMsg::DelayedTransfer {id} => to_binary(&DELAYED_TRANSFER.query_delayed_transfer(deps, id)?),
+        QueryMsg::EpochLength {} => to_binary(&VOLUME_CONTROL.query_epoch_length(deps)?),
+        QueryMsg::EpochVolume {token} => to_binary(&VOLUME_CONTROL.query_epoch_volume(deps, token)?),
+        QueryMsg::EpochVolumeCap {token} => to_binary(&VOLUME_CONTROL.query_epoch_volume_cap(deps, token)?),
+        QueryMsg::LastOpTimestamp {token} => to_binary(&VOLUME_CONTROL.query_last_op_timestamp(deps, token)?),
     }
 }
 
