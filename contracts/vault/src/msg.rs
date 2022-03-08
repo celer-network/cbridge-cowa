@@ -73,6 +73,7 @@ pub enum ExecuteMsg {
     Receive(cw20::Cw20ReceiveMsg),
 
     DepositNative(DepositMsg),
+    ExecuteDelayedTransfer{id: Vec<u8>},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

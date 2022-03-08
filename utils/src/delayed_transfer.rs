@@ -31,9 +31,9 @@ pub enum DelayedTransferError {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct DelayedXfer {
-    receiver: Addr,
-    token: Addr,
-    amount: Uint256,
+    pub receiver: Addr,
+    pub token: Addr,
+    pub amount: Uint256,
     timestamp: u64,
 }
 

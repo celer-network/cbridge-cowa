@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::ops::Deref;
+use std::str::FromStr;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -107,7 +108,24 @@ pub fn execute(
 
         // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
         ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env, pbmsg, sigs),
+
+        // execute a delayed transfer
+        ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
     }
+}
+
+pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id: Vec<u8>) -> Result<Response, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage.deref())?;
+    let (resp, dt) = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
+    let state = STATE.load(deps.storage)?;
+    if let Ok(amount) = u128::from_str(&dt.amount.to_string()) {
+        let msg = _send_token(state.native_tokens, dt.token, dt.receiver, amount)?;
+        Ok(Response::new().add_attributes(resp.attributes).add_message(msg))
+    } else {
+        Err(ContractError::Std(StdError::generic_err("err when parsing Uint256 into u128.")))
+    }
+
 }
 
 pub fn do_withdraw(
@@ -177,28 +195,31 @@ pub fn do_withdraw(
         res = res.add_attributes(resp_delayed_transfer.attributes);
     } else {
         // send token
-        let send_token_msg: CosmosMsg;
-        if let Ok(i) = state.native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
-            // native token
-            send_token_msg = CosmosMsg::Bank(BankMsg::Send {
-                to_address: receiver.into_string(),
-                amount: vec![coin(amount, &state.native_tokens[i].denom)],
-            });
-        } else {
-            // cw20 token
-            send_token_msg = CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: token.into_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: receiver.into_string(),
-                    amount: Uint128::from(amount),
-                })?,
-                funds: vec![],
-            });
-        }
+        let send_token_msg: CosmosMsg = _send_token(state.native_tokens, token, receiver, amount)?;
         res = res.add_message(send_token_msg);
     }
 
     Ok(res)
+}
+
+fn _send_token(native_tokens: Vec<NativeToken>, token: Addr, receiver: Addr, amount: u128) -> StdResult<CosmosMsg> {
+    if let Ok(i) = native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
+        // native token
+        Ok(CosmosMsg::Bank(BankMsg::Send {
+            to_address: receiver.into_string(),
+            amount: vec![coin(amount, &native_tokens[i].denom)],
+        }))
+    } else {
+        // cw20 token
+        Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: token.into_string(),
+            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                recipient: receiver.into_string(),
+                amount: Uint128::from(amount),
+            })?,
+            funds: vec![],
+        }))
+    }
 }
 
 pub fn update_sigchecker(
@@ -227,8 +248,8 @@ pub fn update_deposit_amt_setting(
     amount: u128,
     is_min: bool,
 ) -> Result<Response, ContractError> {
-    // must called by owner
-    OWNER.assert_owner(deps.as_ref(), &info)?;
+    // must called by governor
+    GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
     // make sure token is valid
     let valid_addr = deps.api.addr_validate(token_addr)?;
     if is_min {
