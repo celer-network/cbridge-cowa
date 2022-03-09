@@ -155,7 +155,6 @@ pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id: Vec<u8>) -> Resu
     } else {
         Err(ContractError::Std(StdError::generic_err("err when parsing Uint256 into u128.")))
     }
-
 }
 
 pub fn do_withdraw(
