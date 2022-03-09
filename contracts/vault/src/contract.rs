@@ -111,17 +111,47 @@ pub fn execute(
 
         // execute a delayed transfer
         ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
+
+        // emit an evnet
+        ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), method, params),
     }
+}
+
+pub fn do_emit_event(deps: Deps, method: String, params: Vec<Binary>) -> Result<Response, ContractError> {
+    match method.as_str() {
+        "delayed_transfer_added" => {
+            if params.len() != 1 {
+                return Err(ContractError::Std(StdError::generic_err("invalid params")));
+            }
+            Ok(DELAYED_TRANSFER.emit_delayed_transfer_added(deps.storage, &params[0].to_vec())?)
+        }
+        "delayed_transfer_executed" => {
+            if params.len() != 1 {
+                return Err(ContractError::Std(StdError::generic_err("invalid params")));
+            }
+            Ok(DELAYED_TRANSFER.emit_delayed_transfer_executed(deps.storage, &params[0].to_vec())?)
+        }
+        &_ => {Err(ContractError::Std(StdError::generic_err("unknown event method")))} }
 }
 
 pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id: Vec<u8>) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage.deref())?;
-    let (resp, dt) = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
+    let dt = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
     let state = STATE.load(deps.storage)?;
     if let Ok(amount) = u128::from_str(&dt.amount.to_string()) {
         let msg = _send_token(state.native_tokens, dt.token, dt.receiver, amount)?;
-        Ok(Response::new().add_attributes(resp.attributes).add_message(msg))
+        Ok(Response::new().add_message(msg).add_message(
+            CosmosMsg::Wasm(
+                WasmMsg::Execute {
+                    contract_addr: env.contract.address.into_string(),
+                    msg: to_binary(&ExecuteMsg::EmitEvent {
+                        method: String::from("delayed_transfer_executed"),
+                        params: vec![to_binary(&id)?],
+                    })?,
+                    funds: vec![],
+                }
+        )))
     } else {
         Err(ContractError::Std(StdError::generic_err("err when parsing Uint256 into u128.")))
     }
@@ -184,7 +214,7 @@ pub fn do_withdraw(
     let delay_threshold = DELAYED_TRANSFER.get_delay_threshold(deps.storage.deref(), &token)?;
     if Uint256::from(amount) > delay_threshold {
         // delay transfer
-        let resp_delayed_transfer = DELAYED_TRANSFER.add_delayed_transfer(
+        DELAYED_TRANSFER.add_delayed_transfer(
             deps.storage,
             env.block.time.seconds(),
             wd_id.as_ref(),
@@ -192,7 +222,18 @@ pub fn do_withdraw(
             &token,
             &Uint256::from(amount),
         )?;
-        res = res.add_attributes(resp_delayed_transfer.attributes);
+        res = res.add_message(
+            CosmosMsg::Wasm(
+                WasmMsg::Execute {
+                    contract_addr: contract_addr.into_string(),
+                    msg: to_binary(&ExecuteMsg::EmitEvent {
+                        method: String::from("delayed_transfer_added"),
+                        params: vec![to_binary(&wd_id)?],
+                    })?,
+                    funds: vec![],
+                }
+            )
+        )
     } else {
         // send token
         let send_token_msg: CosmosMsg = _send_token(state.native_tokens, token, receiver, amount)?;

@@ -74,6 +74,10 @@ pub enum ExecuteMsg {
 
     DepositNative(DepositMsg),
     ExecuteDelayedTransfer{id: Vec<u8>},
+    EmitEvent{
+        method: String,
+        params: Vec<Binary>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

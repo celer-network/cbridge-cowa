@@ -77,7 +77,7 @@ impl<'a> DelayedTransfer<'a> {
     }
 
     /// add delayed transrer
-    pub fn add_delayed_transfer(&self, store: &mut dyn Storage, block_time: u64, id: &Vec<u8>, receiver: &Addr, token: &Addr, amount: &Uint256) -> Result<Response, DelayedTransferError> {
+    pub fn add_delayed_transfer(&self, store: &mut dyn Storage, block_time: u64, id: &Vec<u8>, receiver: &Addr, token: &Addr, amount: &Uint256) -> Result<(), DelayedTransferError> {
         if self.delayed_transfers.has(store, id.to_vec()) {
             return Err(DelayedTransferError::Existed {});
         }
@@ -88,12 +88,11 @@ impl<'a> DelayedTransfer<'a> {
             timestamp: block_time
         };
         self.delayed_transfers.save(store, id.to_vec(), &dt)?;
-        Ok(Response::new().add_attribute("delayed_transfer_action", "add_delayed_transfer")
-            .add_attribute("delayed_transfer_id", hex::encode(id)))
+        Ok(())
     }
 
     /// execute delayed transfer by its id, and return the delayed transfer as well
-    pub fn execute_delayed_transfer(&self, store: &mut dyn Storage, block_time: u64, id: &Vec<u8>) -> Result<(Response, DelayedXfer), DelayedTransferError> {
+    pub fn execute_delayed_transfer(&self, store: &mut dyn Storage, block_time: u64, id: &Vec<u8>) -> Result<DelayedXfer, DelayedTransferError> {
         if !self.delayed_transfers.has(store, id.to_vec()) {
             return Err(DelayedTransferError::NotExist {});
         }
@@ -102,14 +101,27 @@ impl<'a> DelayedTransfer<'a> {
             return Err(DelayedTransferError::TimeNotYet {});
         }
         self.delayed_transfers.remove(store, id.to_vec());
-        Ok((
-            Response::new().add_attribute("delayed_transfer_action", "execute_delayed_transfer")
-                .add_attribute("delayed_transfer_id", hex::encode(id))
-                .add_attribute("delayed_transfer_receiver", &dt.receiver)
-                .add_attribute("delayed_transfer_token", &dt.token)
-                .add_attribute("delayed_transfer_amount", dt.amount.to_string()),
-            dt,
-        ))
+        Ok(dt)
+    }
+
+    // emit an event of adding a delayed transfer
+    pub fn emit_delayed_transfer_added(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response, DelayedTransferError> {
+        if !self.delayed_transfers.has(store, id.to_vec()) {
+            Err(DelayedTransferError::NotExist {})
+        } else {
+            Ok(Response::new().add_attribute("delayed_transfer_action", "add_delayed_transfer")
+                .add_attribute("delayed_transfer_id", hex::encode(id)))
+        }
+    }
+
+    // emit an event of executing a delayed transfer
+    pub fn emit_delayed_transfer_executed(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response, DelayedTransferError> {
+        if self.delayed_transfers.has(store, id.to_vec()) {
+            Err(DelayedTransferError::Existed {})
+        } else {
+            Ok(Response::new().add_attribute("delayed_transfer_action", "execute_delayed_transfer")
+                .add_attribute("delayed_transfer_id", hex::encode(id)))
+        }
     }
 
     //external functions
@@ -225,7 +237,7 @@ mod tests {
         obj.execute_set_delay_period(deps.as_mut(), info.clone(), 1000).unwrap();
 
         let token = deps.api.addr_validate("1234").unwrap();
-        let resp = obj.add_delayed_transfer(
+        obj.add_delayed_transfer(
             deps.as_mut().storage,
             1000,
             vec![10 as u8, 11 as u8, 12 as u8].as_ref(),
@@ -233,11 +245,13 @@ mod tests {
             &token,
             &Uint256::from(666 as u64),
         ).unwrap();
+        let resp = obj.emit_delayed_transfer_added(deps.as_ref().storage, vec![10 as u8, 11 as u8, 12 as u8].as_ref()).unwrap();
         assert_eq!(resp.attributes.contains(&Attribute::new("delayed_transfer_id", hex::encode(vec![10 as u8, 11 as u8, 12 as u8]))), true);
         assert_eq!(resp.attributes.len(), 2);
 
-        let (resp, dt) = obj.execute_delayed_transfer(deps.as_mut().storage, 3000, vec![10 as u8, 11 as u8, 12 as u8].as_ref()).unwrap();
-        assert_eq!(resp.attributes.len(), 5);
+        let dt = obj.execute_delayed_transfer(deps.as_mut().storage, 3000, vec![10 as u8, 11 as u8, 12 as u8].as_ref()).unwrap();
+        let resp = obj.emit_delayed_transfer_executed(deps.as_ref().storage, vec![10 as u8, 11 as u8, 12 as u8].as_ref()).unwrap();
+        assert_eq!(resp.attributes.len(), 2);
         let expected_dt = DelayedXfer{
             receiver: owner_addr.clone(),
             token: token.clone(),
