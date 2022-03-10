@@ -1,7 +1,7 @@
 use cosmwasm_std::StdError;
 use thiserror::Error;
 use utils::owner::OwnerError;
-use utils::signers::SignersError;
+use utils::error::SignersError;
 
 #[derive(Error, Debug)]
 pub enum ContractError {

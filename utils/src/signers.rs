@@ -6,33 +6,12 @@ use std::ops::Deref;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use thiserror::Error;
-
 use crate::{abi, func};
+use crate::error::SignersError;
 
 use cosmwasm_std::{Addr, CanonicalAddr, Deps, Storage, Response, StdError, StdResult, Uint128, DepsMut, MessageInfo, Binary};
 use cw_storage_plus::{Item};
-use cosmwasm_crypto::CryptoError;
-use crate::owner::{Owner, OwnerError};
-
-/// Errors returned from Signers
-#[derive(Error, Debug)]
-pub enum SignersError {
-    #[error("{0}")]
-    Std(#[from] StdError),
-
-    #[error("{0}")]
-    OwnerError(#[from] OwnerError),
-
-    #[error("signing power not enough")]
-    NotEnoughPower {},
-
-    #[error("triggerTime is not valid")]
-    BadTriggerTime {},
-
-    #[error("{0}")]
-    CryptoError(#[from] CryptoError),
-}
+use crate::owner::{Owner};
 
 /// save triggerTime, resetTime and noticePeriod
 /// all numbers are native u64 as u256 is overkill just cheaper on solidity
@@ -199,7 +178,7 @@ impl<'a> Signers<'a> {
             |s| s.as_slice()
         ).collect();
         for sig in sigs {
-            let signer = func::recover_signer(&eth_msg, sig)?;
+            let signer = func::recover_signer(deps, &eth_msg, sig)?;
             if let Some(power) = signer_powers.get(&signer) {
                 signed_power = signed_power.add(power);
                 if signed_power >= quorum {

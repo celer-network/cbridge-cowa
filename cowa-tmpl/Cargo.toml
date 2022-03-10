@@ -3,6 +3,7 @@ name = "{{project-name}}"
 version = "0.1.0"
 authors = ["Celer Network"]
 edition = "2018"
+resolver = "2"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -36,4 +37,3 @@ utils = { path = "../../utils", version = "0.1.0" }
 
 [dev-dependencies]
 cosmwasm-schema = { version = "0.16.2" }
-getrandom = { version = "0.2", features = ["js"] }
