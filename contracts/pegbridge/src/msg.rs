@@ -1,6 +1,7 @@
 use cosmwasm_std::{Addr, Binary, Uint256};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use token::msg::Cw20BurnMsg;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -60,19 +61,24 @@ pub enum ExecuteMsg {
         pbmsg: Binary,
         sigs: Vec<Binary>,
     },
+    /// called by a CW20 based test token
+    Burn ( Cw20BurnMsg ),
+    UpdateMinBurn{ token_addr: String, amount: u128 },
+    UpdateMaxBurn{ token_addr: String, amount: u128 },
 
-    Burn { 
-        token: String, /// CW20 pegged token addr, cosmwasm bech32 string
-        amount: u128,
-        to_chain_id: u64,
-        to_account: String, /// ETH address Hex string without 0x prefix
-        nonce: u64,
-    },
     ExecuteDelayedTransfer{id: Vec<u8>},
     EmitEvent{
         method: String,
         params: Vec<Binary>,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct BurnMsg { // user call cw20 based token.burn with this msg
+    pub to_chid: u64,
+    pub to_acnt: String, /// ETH address Hex string without 0x prefix
+    pub nonce: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

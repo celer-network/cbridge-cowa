@@ -3,15 +3,16 @@ use std::ops::Deref;
 use std::str::FromStr;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr};
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary};
 use cw2::set_contract_version;
 use utils::func::keccak256;
 use cw20::Cw20ExecuteMsg;
+use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg};
 use crate::pegbridge;
-use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL};
+use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS};
 
 use utils::{abi, func};
 
@@ -88,10 +89,10 @@ pub fn execute(
         // ONLY governor. set epoch length.
         ExecuteMsg::SetEpochLength {length} => Ok(VOLUME_CONTROL.execute_set_epoch_length(deps, info, length)?),
         
-        ExecuteMsg::Burn {token, amount, to_chain_id, to_account, nonce} 
-            => do_burn(deps, info,token, amount, to_chain_id, to_account, nonce),
-
+        ExecuteMsg::Burn (msg) => do_burn(deps, info, env.contract.address, msg),
         ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, env, pbmsg, sigs),
+        ExecuteMsg::UpdateMinBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, true),
+        ExecuteMsg::UpdateMaxBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, false),
 
         // execute a delayed transfer
         ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
@@ -258,21 +259,78 @@ pub fn update_sigchecker(
 pub fn do_burn(
     deps: DepsMut,
     info: MessageInfo,
-    token: String, // CW20 pegged token addr, cosmwasm bech32 string
-    amount: u128,
-    to_chain_id: u64,
-    to_account: String, // ETH address Hex string without 0x prefix
-    nonce: u64,
+    this: Addr, // CW20 pegged token addr
+    msg: Cw20BurnMsg,
 ) -> Result<Response, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage)?;
+    let token = info.sender; // cw20 contract Addr
+    let user = msg.sender; // user who called our token.burn
+    let amount = msg.amount; // Uint128 amount
 
-    // to impl
+    let min = MIN_BURN.may_load(deps.storage, token.clone())?;
+    if let Some(min) = min {
+        if amount.u128() <= min {
+            return Err(ContractError::Std(StdError::generic_err("amount too small")));
+        }
+    }
+    let max = MAX_BURN.may_load(deps.storage, token.clone())?;
+    if let Some(max) = max {
+        if amount.u128() > max {
+            return Err(ContractError::Std(StdError::generic_err("amount too large")));
+        }
+    }
+
+    let burn_msg: BurnMsg = from_binary(&msg.msg)?;
+    let burn_id = func::keccak256(&abi::encode_packed(
+        &[
+            abi::SolType::Str(&user),
+            abi::SolType::Bytes(token.as_bytes()),
+            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&burn_msg.to_chid.to_be_bytes()),
+            abi::SolType::Str(&burn_msg.to_acnt),
+            abi::SolType::Bytes(&burn_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
+            abi::SolType::Bytes(this.as_bytes())
+        ]));
+    if BURN_IDS.has(deps.storage, burn_id.clone()) {
+        return Err(ContractError::Std(StdError::generic_err("record exists")));
+    }
+    BURN_IDS.save(deps.storage, burn_id.clone(), &true)?;
+
     let res = Response::new()
         .add_attribute("action", "burn")
-        .add_attribute("burnid", "") // calculated burnid
-        .add_attribute("token", token)
+        .add_attribute("burnid", hex::encode(burn_id)) // calculated burnid
+        .add_attribute("token", deps.api.addr_canonicalize(token.as_str())?.to_string())
         .add_attribute("amount", amount.to_string())
-        .add_attribute("src_chid", to_chain_id.to_string());
+        .add_attribute("burner", deps.api.addr_canonicalize(user.as_str())?.to_string())
+        .add_attribute("to_chid", burn_msg.to_chid.to_string())
+        .add_attribute("to_acnt", burn_msg.to_acnt)
+        .add_attribute("nonce", burn_msg.nonce.to_string());
     Ok(res)
+}
+
+pub fn update_burn_amt_setting(
+    deps: DepsMut,
+    info: MessageInfo,
+    token_addr: &str,
+    amount: u128,
+    is_min: bool,
+) -> Result<Response, ContractError> {
+    // must called by governor
+    GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
+    // make sure token is valid
+    let valid_addr = deps.api.addr_validate(token_addr)?;
+    if is_min {
+        MIN_BURN.save(deps.storage, valid_addr, &amount)?;
+    } else {
+        MAX_BURN.save(deps.storage, valid_addr, &amount)?;
+    }
+
+    Ok(Response::new()
+        .add_attribute("action", "update_".to_owned() + if is_min { "min" } else { "max" } + "_burn")
+        .add_attribute("token", token_addr)
+        .add_attribute("amount", amount.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
