@@ -4,8 +4,7 @@ use cosmwasm_std::{CanonicalAddr};
 use cosmwasm_crypto::secp256k1_recover_pubkey;
 use cosmwasm_crypto::CryptoError;
 
-use crypto::{sha3::Sha3, digest::Digest};
-use rustc_serialize::hex::FromHex;
+use sha3::{Digest, Keccak256};
 
 use crate::abi;
 
@@ -52,7 +51,7 @@ pub fn get_domain(contract_addr: CanonicalAddr, method: &str) -> Vec<u8> {
 }
 
 pub fn keccak256(data: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha3::keccak256();
-    hasher.input(data);
-    hasher.result_str().from_hex().unwrap()
+    let mut hasher = Keccak256::default();
+    hasher.update(data);
+    hasher.finalize().to_vec()
 }
