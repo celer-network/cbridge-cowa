@@ -1,6 +1,6 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError};
+use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, to_binary};
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
@@ -54,7 +54,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 pub fn verify_sigs(deps: Deps, msg: Binary, sigs: Vec<Binary>) -> StdResult<Binary> {
     match SIGNERS.verify_sigs(deps, msg.as_slice(), sigs.as_slice()) {
-        Ok(_) => StdResult::Ok(Binary::from(b"success")),
+        Ok(_) => to_binary("success"),
         Err(error) => StdResult::Err(StdError::generic_err(error.to_string())),
     }
 }

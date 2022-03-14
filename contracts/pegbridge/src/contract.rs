@@ -161,7 +161,7 @@ pub fn do_mint(
         sigs: sigs,
     };
     let state = STATE.load(deps.storage)?;
-    deps.querier.query_wasm_smart(state.sig_checker, &verify_sig_msg)?;
+    let _s: String = deps.querier.query_wasm_smart(state.sig_checker, &verify_sig_msg)?;
 
     let mint: pegbridge::Mint = pegbridge::deserialize_mint(pbmsg.as_slice())?;
     let mint_id = keccak256(&abi::encode_packed(

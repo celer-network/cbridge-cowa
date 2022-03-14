@@ -177,7 +177,7 @@ pub fn do_withdraw(
         sigs: sigs,
     };
     let state = STATE.load(deps.storage)?;
-    deps.querier.query_wasm_smart(state.sig_checker, &verify_sig_msg)?;
+    let _s: String = deps.querier.query_wasm_smart(state.sig_checker, &verify_sig_msg)?;
 
     let withdraw: vault::Withdraw = vault::deserialize_withdraw(pbmsg.as_slice())?;
     let wd_id = func::keccak256(&abi::encode_packed(
