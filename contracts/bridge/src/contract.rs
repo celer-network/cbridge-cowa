@@ -54,7 +54,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 pub fn verify_sigs(deps: Deps, msg: Binary, sigs: Vec<Binary>) -> StdResult<Binary> {
     match SIGNERS.verify_sigs(deps, msg.as_slice(), sigs.as_slice()) {
-        Ok(_) => StdResult::Ok(Binary::default()),
+        Ok(_) => StdResult::Ok(Binary::from(b"success")),
         Err(error) => StdResult::Err(StdError::generic_err(error.to_string())),
     }
 }
