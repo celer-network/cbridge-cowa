@@ -47,7 +47,7 @@ pub fn instantiate(
         name: msg.name,
         symbol: msg.symbol,
         decimals: msg.decimals,
-        total_supply: Uint128::new(0),
+        total_supply: Uint128::zero(),
         // set creator as minter
         mint: Some(MinterData {
             minter: msg.bridge.clone(),
@@ -160,8 +160,6 @@ mod tests {
             name: "Integers".to_string(),
             symbol: "INT".to_string(),
             decimals: 10,
-            total_supply: Uint128::zero(),
-            mint: None,
             bridge: bridge.clone(),
         };
         let info = mock_info("creator", &coins(1000, "earth"));

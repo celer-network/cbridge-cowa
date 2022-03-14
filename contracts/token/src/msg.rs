@@ -1,5 +1,4 @@
 use cosmwasm_std::{Addr, CosmosMsg, StdResult, to_binary, Binary, Uint128, WasmMsg};
-use cw20_base::state::MinterData;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -8,8 +7,6 @@ pub struct InstantiateMsg {
     pub name: String,
     pub symbol: String,
     pub decimals: u8,
-    pub total_supply: Uint128,
-    pub mint: Option<MinterData>,
     pub bridge: Addr,
 }
 
