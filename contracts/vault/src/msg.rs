@@ -137,3 +137,12 @@ pub struct NativeToken {
     pub denom: String,
     pub mapped_addr: Addr,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BridgeQueryMsg {
+    VerifySigs {
+        msg: Binary, 
+        sigs: Vec<Binary>
+    },
+}

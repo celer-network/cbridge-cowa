@@ -123,3 +123,12 @@ pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BridgeQueryMsg {
+    VerifySigs {
+        msg: Binary, 
+        sigs: Vec<Binary>
+    },
+}

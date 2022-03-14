@@ -10,7 +10,7 @@ use cw20::Cw20ExecuteMsg;
 use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg};
 use crate::pegbridge;
 use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS};
 
@@ -156,7 +156,7 @@ pub fn do_mint(
                 abi::SolType::Bytes(&domain), 
                 abi::SolType::Bytes(pbmsg.as_slice()),
             ]);
-    let verify_sig_msg = bridge::msg::QueryMsg::VerifySigs {
+    let verify_sig_msg = BridgeQueryMsg::VerifySigs {
         msg: Binary::from(msg), 
         sigs: sigs,
     };

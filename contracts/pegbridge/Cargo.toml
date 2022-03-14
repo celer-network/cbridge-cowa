@@ -39,7 +39,6 @@ hex = "0.4"
 
 # our own utils crate
 utils = { path = "../../utils", version = "0.1.0" }
-bridge = { path = "../bridge", version = "0.1.0" }
 token = { path = "../token", version = "0.1.0", features = ["library"] }
 
 [dev-dependencies]

@@ -10,7 +10,7 @@ use cw2::set_contract_version;
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg};
 use crate::vault;
 
 use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL};
@@ -172,7 +172,7 @@ pub fn do_withdraw(
                 abi::SolType::Bytes(&domain), 
                 abi::SolType::Bytes(pbmsg.as_slice()),
             ]);
-    let verify_sig_msg = bridge::msg::QueryMsg::VerifySigs {
+    let verify_sig_msg = BridgeQueryMsg::VerifySigs {
         msg: Binary::from(msg), 
         sigs: sigs,
     };
