@@ -18,7 +18,9 @@ pub enum ExecuteMsg {
         signers: Vec<String>, 
         powers: Vec<Uint128>,
         sigs: Vec<Binary>
-    }
+    },
+    NotifyResetSigners {
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

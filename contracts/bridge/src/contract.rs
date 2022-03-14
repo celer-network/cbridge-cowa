@@ -40,6 +40,8 @@ pub fn execute(
             Ok(SIGNERS.reset_signers(deps, info, _env.block.time.seconds(), signers.as_slice(), powers.as_slice())?),
         ExecuteMsg::UpdateSigners {trigger_time, signers, powers, sigs} =>
             Ok(SIGNERS.update_signers(deps, trigger_time, _env.contract.address, signers.as_slice(), powers.as_slice(), sigs.as_slice())?),
+        ExecuteMsg::NotifyResetSigners {} =>
+            Ok(SIGNERS.notify_reset_signers(deps, info, _env.block.time.seconds())?),
     }
 }
 
