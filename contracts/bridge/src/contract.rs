@@ -61,7 +61,7 @@ pub fn verify_sigs(deps: Deps, msg: Binary, sigs: Vec<Binary>) -> StdResult<Bina
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{CanonicalAddr, Uint128};
+    use cosmwasm_std::{Uint128};
 
     #[test]
     fn proper_initialization() {
@@ -86,9 +86,12 @@ mod tests {
 
         let bytes: &[u8] = &[0xC1, 0x69, 0x9e, 0x89, 0x63, 0x9a, 0xDd, 0xa8, 0xf3, 0x9f, 0xAe, 0xFc, 0x0F, 0xc2, 0x94, 0xee, 0x5C, 0x3B, 0x46, 0x2d]; 
         let msg = ExecuteMsg::ResetSigners {
-            signers: vec![CanonicalAddr::from(bytes)],
+            signers: vec![hex::encode(bytes)],
             powers: vec![Uint128::from(100000000000u128)],
         };
+
+        let s = serde_json_wasm::to_string(&msg).unwrap();
+        println!("{}", s);
 
         // unwrap successfully
         let res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
@@ -100,7 +103,7 @@ mod tests {
         let bytes3: &[u8] = &[0xC4, 0xEb, 0xeA, 0x4E, 0xBD, 0x51, 0xC4, 0x3a, 0x92, 0xCb, 0x97, 0x00, 0xf0, 0x87, 0x70, 0xbc, 0x8f, 0x26, 0x4D, 0x32];
         let msg = ExecuteMsg::UpdateSigners {
             trigger_time: 1,
-            signers: vec![CanonicalAddr::from(bytes0), CanonicalAddr::from(bytes1), CanonicalAddr::from(bytes2), CanonicalAddr::from(bytes3)],
+            signers: vec![hex::encode(bytes0), hex::encode(bytes1), hex::encode(bytes2), hex::encode(bytes3)],
             powers: vec![Uint128::from(12000000000000000000u128),Uint128::from(11000000000000000000u128),Uint128::from(10000000000000000000u128),Uint128::from(9000000000000000000u128)],
             sigs: vec![Binary::from([232,210,131,234,128,44,120,86,224,125,234,228,54,146,101,110,29,79,2,42,93,124,83,238,186,32,110,95,78,250,251,211,82,148,62,4,114,56,88,126,39,254,45,54,214,192,5,85,32,248,71,40,14,244,1,92,2,173,186,30,20,68,24,177,27])],
         };

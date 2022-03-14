@@ -66,7 +66,7 @@ impl<'a> Signers<'a> {
     /// only should be called by contract owner, calling contract MUST check!!!
     /// this func has NO sender check and will update internal map directly
     /// block_time is env.block.time.seconds();
-    pub fn reset_signers(&self, deps: DepsMut, info: MessageInfo, block_time: u64, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
+    pub fn reset_signers(&self, deps: DepsMut, info: MessageInfo, block_time: u64, signers:&[String], powers: &[Uint128]) -> Result<Response, SignersError> {
         let store = deps.storage;
         // solidity modifier onlyOwner
         self.2.only_owner(store.deref(), &info.sender)?;
@@ -81,12 +81,15 @@ impl<'a> Signers<'a> {
         Ok(resp.add_attribute("method", "reset_signers"))
     }
 
-    fn _update_signers(&self, store: &mut dyn Storage, signers:&[CanonicalAddr], powers: &[Uint128]) -> Result<Response, SignersError> {
+    fn _update_signers(&self, store: &mut dyn Storage, signers:&[String], powers: &[Uint128]) -> Result<Response, SignersError> {
         if signers.len() != powers.len() {
             return Err(SignersError::Std(StdError::generic_err("signers and powers length not match")));
         }
+        let fmt_signers: Vec<CanonicalAddr> = signers.iter().map(
+            |s| CanonicalAddr::from(hex::decode(s).unwrap())
+        ).collect();
         self.1.save(store, &SignerPowers {
-            signers: signers.to_vec(), 
+            signers: fmt_signers, 
             powers: powers.to_vec()}
         )?;
 
@@ -128,7 +131,7 @@ impl<'a> Signers<'a> {
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
     /// contract_addr will be 12..32 of the hash of the addr
-    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[CanonicalAddr], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
+    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[String], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
         if signer_state.trigger_time >= trigger_time {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
@@ -141,7 +144,7 @@ impl<'a> Signers<'a> {
                     abi::SolType::Uint256(&cosmwasm_std::Uint256::from(trigger_time).to_be_bytes()), 
                     abi::SolType::AddrList(&new_signers.iter().map(
                         |i| -> [u8;20] {
-                            let a: Result<[u8;20], _> = i.as_slice().try_into();
+                            let a: Result<[u8;20], _> = hex::decode(i).unwrap().as_slice().try_into();
                             a.unwrap()
                         }).collect()),
                     abi::SolType::Uint256List(&new_powers.iter().map(

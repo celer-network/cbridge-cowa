@@ -1,4 +1,4 @@
-use cosmwasm_std::{Binary, CanonicalAddr, Uint128};
+use cosmwasm_std::{Binary, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -10,12 +10,12 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     ResetSigners {
-        signers: Vec<CanonicalAddr>, 
+        signers: Vec<String>, 
         powers: Vec<Uint128>
     },
     UpdateSigners {
         trigger_time: u64,
-        signers: Vec<CanonicalAddr>, 
+        signers: Vec<String>, 
         powers: Vec<Uint128>,
         sigs: Vec<Binary>
     }
