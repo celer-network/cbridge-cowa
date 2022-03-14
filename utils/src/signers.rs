@@ -90,7 +90,11 @@ impl<'a> Signers<'a> {
             powers: powers.to_vec()}
         )?;
 
-        Ok(Response::new())
+        Ok(Response::new()
+            .add_attribute("action", "signers_updated")
+            .add_attribute("signers", serde_json_wasm::to_string(&signers).unwrap())
+            .add_attribute("powers", serde_json_wasm::to_string(&powers).unwrap())
+        )
     }
 
     /// only should be called by contract owner, calling contract MUST check!!!
