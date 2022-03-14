@@ -82,6 +82,11 @@ pub fn execute_update_bridge(deps: DepsMut, info: MessageInfo, bridge: String) -
     OWNER.assert_owner(deps.as_ref(), &info)?;
     let bridge_addr = deps.api.addr_validate(bridge.as_str())?;
     BRIDGE.save(deps.storage, &bridge_addr)?;
+    // update minter
+    TOKEN_INFO.update(deps.storage, |mut info| -> StdResult<_> {
+        info.mint = Some(MinterData{minter: bridge_addr.clone(), cap: None});
+        Ok(info)
+    })?;
     Ok(Response::new().add_attribute("action", "update_bridge")
         .add_attribute("bridge", bridge_addr.as_str()))
 }
