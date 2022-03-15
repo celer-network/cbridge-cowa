@@ -50,7 +50,11 @@ impl<'a> VolumeControl<'a> {
     //utils
     /// get epoch length
     pub fn get_epoch_length(&self, store: &dyn Storage) -> StdResult<u64> {
-        self.epoch_length.load(store)
+        if let Ok(length) = self.epoch_length.load(store) {
+            Ok(length)
+        } else {
+            Ok(0)
+        }
     }
 
     /// get epoch volumes
@@ -64,7 +68,11 @@ impl<'a> VolumeControl<'a> {
 
     /// get epoch volume cap
     pub fn get_epoch_volume_cap(&self, store: &dyn Storage, token: &Addr) -> StdResult<Uint256> {
-        self.epoch_volume_caps.load(store, token)
+        if let Ok(cap) = self.epoch_volume_caps.load(store, token) {
+            Ok(cap)
+        } else {
+            Ok(Uint256::zero())
+        }
     }
 
     /// get last op timestamp
@@ -80,6 +88,9 @@ impl<'a> VolumeControl<'a> {
     pub fn update_volume(&self, store: &mut dyn Storage, block_time: u64, token: &Addr, amount: &Uint256) -> Result<(), VolumeControlError> {
         let epoch_length = self.get_epoch_length(store)?;
         let volume_cap = self.get_epoch_volume_cap(store, token)?;
+        if epoch_length == 0 || volume_cap.is_zero() {
+            return Ok(());
+        }
         let mut volume = self.get_epoch_volume(store, token)?;
         let epoch_start_time = block_time.clone().div(epoch_length).mul(epoch_length);
         let last_op_timestamp = self.get_last_op_timestamp(store, token)?;
@@ -131,9 +142,6 @@ impl<'a> VolumeControl<'a> {
         let mut resp = Response::new().add_attribute("action", "set_epoch_volume_caps");
         for i in 0..tokens.len() {
             let token_addr = deps.api.addr_validate(&tokens[i])?;
-            if caps[i].clone() == Uint256::zero() {
-                return Err(VolumeControlError::InvalidInputs {})
-            }
             self.epoch_volume_caps.save(deps.storage, &token_addr, &caps[i])?;
             resp = resp.add_attribute(token_addr, caps[i]);
         }
@@ -143,9 +151,6 @@ impl<'a> VolumeControl<'a> {
     /// set epoch length
     pub fn execute_set_epoch_length(&self, deps: DepsMut, info: MessageInfo, length: u64) -> Result<Response, VolumeControlError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
-        if length == 0 {
-            return Err(VolumeControlError::InvalidInputs {})
-        }
         self.epoch_length.save(deps.storage, &length)?;
         Ok(Response::new().add_attribute("action", "set_epoch_length")
             .add_attribute("epoch_length", length.to_string()))
