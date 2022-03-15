@@ -4,7 +4,7 @@ use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response,
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{Cw20BurnMsg, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{Cw20BurnMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::state::{BRIDGE, OWNER};
 
 use cw20_base::{
@@ -14,6 +14,7 @@ use cw20_base::{
         execute_transfer,
         query_balance,
         query_minter,
+        query_token_info,
     },
     state::{
         MinterData,
@@ -135,15 +136,22 @@ pub fn execute_burn(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::QueryBridge {} => to_binary(&query_bridge(deps)?),
-        QueryMsg::QueryBalance {address} => to_binary(&query_balance(deps, address)?),
-        QueryMsg::QueryMinter {} => to_binary(&query_minter(deps)?),
-        QueryMsg::QueryOwner {} => to_binary(&OWNER.get(deps)?),
+        QueryMsg::Bridge {} => to_binary(&query_bridge(deps)?),
+        QueryMsg::Balance {address} => to_binary(&query_balance(deps, address)?),
+        QueryMsg::Minter {} => to_binary(&query_minter(deps)?),
+        QueryMsg::Owner {} => to_binary(&OWNER.get(deps)?),
+        QueryMsg::TokenInfo {} => to_binary(&query_token_info(deps)?),
     }
 }
 
 fn query_bridge(deps: Deps) -> StdResult<Addr> {
     BRIDGE.load(deps.storage)
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::new())
 }
 
 #[cfg(test)]
@@ -169,7 +177,7 @@ mod tests {
         assert_eq!(0, res.messages.len());
 
         // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::QueryBridge {}).unwrap();
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::Bridge {}).unwrap();
         let address: Addr = from_binary(&res).unwrap();
         assert_eq!(bridge, address);
     }

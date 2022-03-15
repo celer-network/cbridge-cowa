@@ -35,10 +35,11 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     // GetBridge returns the current bridge
-    QueryBridge {},
-    QueryBalance {address: String},
-    QueryMinter {},
-    QueryOwner {},
+    Bridge {},
+    Balance {address: String},
+    Minter {},
+    Owner {},
+    TokenInfo {},
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -73,4 +74,9 @@ impl Cw20BurnMsg {
 #[serde(rename_all = "snake_case")]
 enum ReceiverExecuteMsg {
     Burn(Cw20BurnMsg),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct MigrateMsg {
 }
