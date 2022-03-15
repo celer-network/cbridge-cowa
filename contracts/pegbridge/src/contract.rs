@@ -1,5 +1,4 @@
 #[cfg(not(feature = "library"))]
-use std::convert::TryInto;
 use std::ops::Deref;
 use std::str::FromStr;
 use cosmwasm_std::entry_point;
