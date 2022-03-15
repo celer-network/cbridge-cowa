@@ -197,7 +197,7 @@ pub fn do_withdraw(
 
     let token = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.token.clone())).unwrap();
     let receiver = deps.api.addr_humanize(&CanonicalAddr::from(withdraw.receiver.clone())).unwrap();
-    let amount = u128::from_be_bytes(withdraw.amount.clone().try_into().unwrap());
+    let amount = u128::from_be_bytes(abi::pad_to_16_bytes(&withdraw.amount.clone()));
 
     let mut res = Response::new()
         .add_attribute("action", "withdraw")

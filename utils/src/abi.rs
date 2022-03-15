@@ -1,3 +1,5 @@
+use core::panic;
+
 /// types and helper funcs, mostly to be compatible with solidity/evm stuff
 // define SolType to wrap so we can match type then return correct Vec<u8>
 pub enum SolType<'a> {
@@ -66,6 +68,16 @@ pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
 fn pad_addr(addr: &[u8; 20]) -> Word {
     let mut padded = [0u8; 32];
     padded[12..].copy_from_slice(addr);
+    padded
+}
+
+pub fn pad_to_16_bytes(ori: &[u8]) -> [u8;16] {
+    if ori.len() > 16 {
+        panic!("unreachable: len bigger than 16")
+    }
+    let mut padded = [0u8; 16];
+    let from = 16 - ori.len();
+    padded[from..].copy_from_slice(ori);
     padded
 }
 
