@@ -181,7 +181,7 @@ pub fn do_mint(
 
     let token = deps.api.addr_humanize(&CanonicalAddr::from(mint.token.clone())).unwrap();
     let receiver = deps.api.addr_humanize(&CanonicalAddr::from(mint.account.clone())).unwrap();
-    let amount = u128::from_be_bytes(mint.amount.clone().try_into().unwrap());
+    let amount = u128::from_be_bytes(abi::pad_to_16_bytes(&mint.amount.clone()));
 
     let mut res = Response::new()
         .add_attribute("action", "mint")
