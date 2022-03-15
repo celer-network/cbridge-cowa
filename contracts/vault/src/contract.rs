@@ -210,7 +210,7 @@ pub fn do_withdraw(
 
     VOLUME_CONTROL.update_volume(deps.storage, env.block.time.seconds(), &token, &Uint256::from(amount))?;
     let delay_threshold = DELAYED_TRANSFER.get_delay_threshold(deps.storage.deref(), &token)?;
-    if Uint256::from(amount) > delay_threshold {
+    if !delay_threshold.is_zero() && Uint256::from(amount) > delay_threshold {
         // delay transfer
         DELAYED_TRANSFER.add_delayed_transfer(
             deps.storage,

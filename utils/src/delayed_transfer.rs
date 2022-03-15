@@ -63,12 +63,20 @@ impl<'a> DelayedTransfer<'a> {
     //utils
     /// get delay period
     pub fn get_delay_period(&self, store: &dyn Storage) -> StdResult<u64> {
-        self.delay_period.load(store)
+        if let Ok(period) = self.delay_period.load(store) {
+            Ok(period)
+        } else {
+            Ok(0)
+        }
     }
 
     /// get delay threshold
     pub fn get_delay_threshold(&self, store: &dyn Storage, token: &Addr) -> StdResult<Uint256> {
-        self.delay_thresholds.load(store, token)
+        if let Ok(threshold) = self.delay_thresholds.load(store, token) {
+            Ok(threshold)
+        } else {
+            Ok(Uint256::zero())
+        }
     }
 
     /// get delay transfer
@@ -96,8 +104,8 @@ impl<'a> DelayedTransfer<'a> {
         if !self.delayed_transfers.has(store, id.to_vec()) {
             return Err(DelayedTransferError::NotExist {});
         }
-        let dt = self.delayed_transfers.load(store, id.to_vec())?;
-        if block_time <= dt.timestamp + self.delay_period.load(store)? {
+        let dt = self.get_delayed_transfer(store, id)?;
+        if block_time <= dt.timestamp + self.get_delay_period(store)? {
             return Err(DelayedTransferError::TimeNotYet {});
         }
         self.delayed_transfers.remove(store, id.to_vec());
@@ -152,9 +160,6 @@ impl<'a> DelayedTransfer<'a> {
         let mut resp = Response::new().add_attribute("action", "set_delay_thresholds");
         for i in 0..tokens.len() {
             let token_addr = deps.api.addr_validate(&tokens[i])?;
-            if thresholds[i].clone() == Uint256::zero() {
-                return Err(DelayedTransferError::InvalidInputs {})
-            }
             self.delay_thresholds.save(deps.storage, &token_addr, &thresholds[i])?;
             resp = resp.add_attribute(token_addr,thresholds[i]);
         }
@@ -164,9 +169,6 @@ impl<'a> DelayedTransfer<'a> {
     /// set delay period
     pub fn execute_set_delay_period(&self, deps: DepsMut, info: MessageInfo, period: u64) -> Result<Response, DelayedTransferError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
-        if period == 0 {
-            return Err(DelayedTransferError::InvalidInputs {})
-        }
         self.delay_period.save(deps.storage, &period)?;
         Ok(Response::new().add_attribute("action", "set_delay_period")
             .add_attribute("delay_period", period.to_string()))
