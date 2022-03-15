@@ -9,7 +9,7 @@ use cw20::Cw20ExecuteMsg;
 use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg};
 use crate::pegbridge;
 use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS};
 
@@ -357,6 +357,12 @@ fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
         sig_checker: state.sig_checker, 
     };
     Ok(resp)
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::new())
 }
 
 #[cfg(test)]
