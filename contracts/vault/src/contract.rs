@@ -188,7 +188,6 @@ pub fn do_withdraw(
             abi::SolType::Bytes(&withdraw.burn_account),
             abi::SolType::Bytes(&withdraw.ref_chain_id.to_be_bytes()),
             abi::SolType::Bytes(&withdraw.ref_id),
-            abi::SolType::Bytes(&contract_addr.as_bytes())
         ]));
     if WD_IDS.has(deps.storage, wd_id.clone()) {
         return Err(ContractError::Std(StdError::generic_err("record exists")));

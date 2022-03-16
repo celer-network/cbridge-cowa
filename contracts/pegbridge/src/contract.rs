@@ -177,7 +177,6 @@ pub fn do_mint(
             abi::SolType::Bytes(&mint.depositor),
             abi::SolType::Bytes(&mint.ref_chain_id.to_be_bytes()),
             abi::SolType::Bytes(&mint.ref_id),
-            abi::SolType::Bytes(&contract_addr.as_bytes())
         ]));
     if MINT_IDS.has(deps.storage, mint_id.clone()) {
         return Err(ContractError::Std(StdError::generic_err("record exists")));
