@@ -173,7 +173,7 @@ pub fn do_mint(
         &[
             abi::SolType::Bytes(&mint.account),
             abi::SolType::Bytes(&mint.token),
-            abi::SolType::Bytes(&mint.amount),
+            abi::SolType::Bytes(&abi::pad_to_32_bytes(&mint.amount)),
             abi::SolType::Bytes(&mint.depositor),
             abi::SolType::Bytes(&mint.ref_chain_id.to_be_bytes()),
             abi::SolType::Bytes(&mint.ref_id),

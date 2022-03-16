@@ -184,7 +184,7 @@ pub fn do_withdraw(
         &[
             abi::SolType::Bytes(&withdraw.receiver),
             abi::SolType::Bytes(&withdraw.token),
-            abi::SolType::Bytes(&withdraw.amount),
+            abi::SolType::Bytes(&abi::pad_to_32_bytes(&withdraw.amount)),
             abi::SolType::Bytes(&withdraw.burn_account),
             abi::SolType::Bytes(&withdraw.ref_chain_id.to_be_bytes()),
             abi::SolType::Bytes(&withdraw.ref_id),

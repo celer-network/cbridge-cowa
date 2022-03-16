@@ -81,6 +81,16 @@ pub fn pad_to_16_bytes(ori: &[u8]) -> [u8;16] {
     padded
 }
 
+pub fn pad_to_32_bytes(ori: &[u8]) -> [u8;32] {
+    if ori.len() > 32 {
+        panic!("unreachable: len bigger than 32")
+    }
+    let mut padded = [0u8; 32];
+    let from = 32 - ori.len();
+    padded[from..].copy_from_slice(ori);
+    padded
+}
+
 #[cfg(test)]
 mod tests {
     use hex_literal::hex;
