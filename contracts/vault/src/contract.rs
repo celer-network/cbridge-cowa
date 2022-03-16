@@ -122,13 +122,13 @@ pub fn do_emit_event(deps: Deps, method: String, params: Vec<Binary>) -> Result<
             if params.len() != 1 {
                 return Err(ContractError::Std(StdError::generic_err("invalid params")));
             }
-            Ok(DELAYED_TRANSFER.emit_delayed_transfer_added(deps.storage, &params[0].to_vec())?)
+            Ok(DELAYED_TRANSFER.emit_delayed_transfer_added(deps.storage, &from_binary(&params[0])?)?)
         }
         "delayed_transfer_executed" => {
             if params.len() != 1 {
                 return Err(ContractError::Std(StdError::generic_err("invalid params")));
             }
-            Ok(DELAYED_TRANSFER.emit_delayed_transfer_executed(deps.storage, &params[0].to_vec())?)
+            Ok(DELAYED_TRANSFER.emit_delayed_transfer_executed(deps.storage, &from_binary(&params[0])?)?)
         }
         &_ => {Err(ContractError::Std(StdError::generic_err("unknown event method")))} }
 }
