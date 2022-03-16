@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use std::ops::Deref;
 use std::str::FromStr;
-use cosmwasm_std::entry_point;
+use cosmwasm_std::{ContractResult, entry_point, Reply, ReplyOn, SubMsg};
 use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary};
 use cw2::set_contract_version;
 use utils::func::keccak256;
@@ -124,8 +124,9 @@ pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id: Vec<u8>) -> Resu
     let dt = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
     if let Ok(amount) = u128::from_str(&dt.amount.to_string()) {
         let msg = _mint(dt.token, dt.receiver, amount)?;
-        Ok(Response::new().add_message(msg).add_message(
-            CosmosMsg::Wasm(
+        let sub_msg = SubMsg{
+            id: 1,
+            msg: CosmosMsg::Wasm(
                 WasmMsg::Execute {
                     contract_addr: env.contract.address.into_string(),
                     msg: to_binary(&ExecuteMsg::EmitEvent {
@@ -134,7 +135,11 @@ pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id: Vec<u8>) -> Resu
                     })?,
                     funds: vec![],
                 }
-            )))
+            ),
+            gas_limit: Some(100000),
+            reply_on: ReplyOn::Always
+        };
+        Ok(Response::new().add_message(msg).add_submessage(sub_msg))
     } else {
         Err(ContractError::Std(StdError::generic_err("err when parsing Uint256 into u128.")))
     }
@@ -204,8 +209,9 @@ pub fn do_mint(
             &token,
             &Uint256::from(amount),
         )?;
-        res = res.add_message(
-            CosmosMsg::Wasm(
+        let sub_msg = SubMsg{
+            id: 0,
+            msg: CosmosMsg::Wasm(
                 WasmMsg::Execute {
                     contract_addr: contract_addr.into_string(),
                     msg: to_binary(&ExecuteMsg::EmitEvent {
@@ -214,8 +220,11 @@ pub fn do_mint(
                     })?,
                     funds: vec![],
                 }
-            )
-        )
+            ),
+            gas_limit: Some(100000),
+            reply_on: ReplyOn::Always
+        };
+        res = res.add_submessage(sub_msg)
     } else {
         // mint token
         let mint_msg: CosmosMsg = _mint(token, receiver, amount)?;
@@ -365,6 +374,18 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
     Ok(Response::new())
 }
 
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(_deps: DepsMut, _env: Env, msg: Reply) -> Result<(), ContractError> {
+    match msg.id {
+        _ => {
+            match msg.result {
+                ContractResult::Ok(_) => Ok(()),
+                ContractResult::Err(err) => Err(ContractError::Std(StdError::generic_err(err)))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,7 +397,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let signer_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
-        let msg = InstantiateMsg{ sig_checker: signer_addr };
+        let msg = InstantiateMsg { sig_checker: signer_addr };
         let info = mock_info(owner_addr.as_ref(), &[]);
 
         let res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone());
