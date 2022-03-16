@@ -375,11 +375,11 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, C
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn reply(_deps: DepsMut, _env: Env, msg: Reply) -> Result<(), ContractError> {
+pub fn reply(_deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
     match msg.id {
         _ => {
             match msg.result {
-                ContractResult::Ok(_) => Ok(()),
+                ContractResult::Ok(_) => Ok(Response::new()),
                 ContractResult::Err(err) => Err(ContractError::Std(StdError::generic_err(err)))
             }
         }
