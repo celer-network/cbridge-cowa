@@ -118,10 +118,10 @@ pub fn do_emit_event(deps: Deps, method: String, params: Vec<Binary>) -> Result<
         &_ => {Err(ContractError::Std(StdError::generic_err("unknown event method")))} }
 }
 
-pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_b: Binary) -> Result<Response, ContractError> {
+pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage.deref())?;
-    let id : Vec<u8> = from_binary(&id_b)?;
+    let id = hex::decode(id_str)?;
     let dt = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
     if let Ok(amount) = u128::from_str(&dt.amount.to_string()) {
         let msg = _mint(dt.token, dt.receiver, amount)?;
@@ -132,7 +132,7 @@ pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_b: Binary) -> Res
                     contract_addr: env.contract.address.into_string(),
                     msg: to_binary(&ExecuteMsg::EmitEvent {
                         method: String::from("delayed_transfer_executed"),
-                        params: vec![id_b.clone()],
+                        params: vec![to_binary(&id)?],
                     })?,
                     funds: vec![],
                 }

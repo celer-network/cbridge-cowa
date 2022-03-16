@@ -1,4 +1,5 @@
 use cosmwasm_std::StdError;
+use hex::FromHexError;
 use thiserror::Error;
 use utils::delayed_transfer::DelayedTransferError;
 use utils::governor::GovernorError;
@@ -30,5 +31,8 @@ pub enum ContractError {
     VolumeControl(#[from] VolumeControlError),
 
     #[error("{0}")]
-    DecodeError(#[from] prost::DecodeError)
+    DecodeError(#[from] prost::DecodeError),
+
+    #[error("{0}")]
+    HexError(#[from] FromHexError)
 }

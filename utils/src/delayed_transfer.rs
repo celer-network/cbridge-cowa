@@ -3,7 +3,7 @@ use thiserror::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Addr, Binary, Deps, DepsMut, from_binary, MessageInfo, Response, StdError, StdResult, Storage, Uint256};
+use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage, Uint256};
 use cw_storage_plus::{Item, Map};
 use crate::governor::{Governor, GovernorError};
 
@@ -146,9 +146,13 @@ impl<'a> DelayedTransfer<'a> {
     }
 
     /// return the delayed transfer
-    pub fn query_delayed_transfer(&self, deps: Deps, id_b: Binary) -> StdResult<DelayedXfer> {
-        let id : Vec<u8> = from_binary(&id_b)?;
-        self.get_delayed_transfer(deps.storage, &id)
+    pub fn query_delayed_transfer(&self, deps: Deps, id_str: String) -> StdResult<DelayedXfer> {
+        if let Ok(id) = hex::decode(id_str) {
+            self.get_delayed_transfer(deps.storage, &id)
+        } else {
+            Err(StdError::generic_err("cannot convert id from hex into byte array"))
+        }
+
     }
 
     //execute

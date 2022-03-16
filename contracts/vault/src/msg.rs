@@ -73,7 +73,7 @@ pub enum ExecuteMsg {
     Receive(cw20::Cw20ReceiveMsg),
 
     DepositNative(DepositMsg),
-    ExecuteDelayedTransfer{id: Binary},
+    ExecuteDelayedTransfer{id: String},
     EmitEvent{
         method: String,
         params: Vec<Binary>,
@@ -109,7 +109,7 @@ pub enum QueryMsg {
     DelayThreshold {token: String},
     // Return the delayed transfer by its id.
     // Return type: DelayedTransfer::DelayedXfer
-    DelayedTransfer {id: Binary},
+    DelayedTransfer {id: String},
     // Return the epoch length
     // Return type: u64
     EpochLength {},

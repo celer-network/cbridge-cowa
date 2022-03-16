@@ -66,7 +66,7 @@ pub enum ExecuteMsg {
     UpdateMinBurn{ token_addr: String, amount: u128 },
     UpdateMaxBurn{ token_addr: String, amount: u128 },
 
-    ExecuteDelayedTransfer{id: Binary},
+    ExecuteDelayedTransfer{id: String},
     EmitEvent{
         method: String,
         params: Vec<Binary>,
@@ -102,7 +102,7 @@ pub enum QueryMsg {
     DelayThreshold {token: String},
     // Return the delayed transfer by its id.
     // Return type: DelayedTransfer::DelayedXfer
-    DelayedTransfer {id: Binary},
+    DelayedTransfer {id: String},
     // Return the epoch length
     // Return type: u64
     EpochLength {},
