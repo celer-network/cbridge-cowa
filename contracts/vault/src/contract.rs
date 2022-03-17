@@ -324,7 +324,7 @@ pub fn update_native_tokens(
 pub fn do_deposit(
     deps: DepsMut,
     info: MessageInfo,
-    contract_addr: Addr,
+    _contract_addr: Addr,
     wrapped: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
@@ -347,16 +347,18 @@ pub fn do_deposit(
     }
 
     let dep_msg: DepositMsg = from_binary(&wrapped.msg)?;
+    let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
+    let user = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
+    let mint_acnt = hex::decode(dep_msg.mint_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
     let dep_id = func::keccak256(&abi::encode_packed(
         &[
-            abi::SolType::Str(&user),
-            abi::SolType::Bytes(token.as_bytes()),
-            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&user),
+            abi::SolType::Bytes(&token),
+            abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
             abi::SolType::Bytes(&dep_msg.dst_chid.to_be_bytes()),
-            abi::SolType::Str(&dep_msg.mint_acnt),
+            abi::SolType::Bytes(&mint_acnt),
             abi::SolType::Bytes(&dep_msg.nonce.to_be_bytes()),
             abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
-            abi::SolType::Bytes(contract_addr.as_bytes())
         ]));
     if DEP_IDS.has(deps.storage, dep_id.clone()) {
         return Err(ContractError::Std(StdError::generic_err("record exists")));
@@ -366,8 +368,8 @@ pub fn do_deposit(
     let res = Response::new()
         .add_attribute("action", "deposit")
         .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", deps.api.addr_canonicalize(&user).unwrap().to_string())
-        .add_attribute("token", deps.api.addr_canonicalize(token.as_str()).unwrap().to_string())
+        .add_attribute("from", user.to_string())
+        .add_attribute("token", token.to_string())
         .add_attribute("amount", amount)
         .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
         .add_attribute("mint_acct", dep_msg.mint_acnt);
@@ -377,7 +379,7 @@ pub fn do_deposit(
 pub fn do_deposit_native(
     deps: DepsMut,
     info: MessageInfo,
-    contract_addr: Addr,
+    _contract_addr: Addr,
     dep_msg: DepositMsg,
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
@@ -413,16 +415,18 @@ pub fn do_deposit_native(
         }
     }
 
+    let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
+    let user = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
+    let mint_acnt = hex::decode(dep_msg.mint_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
     let dep_id = func::keccak256(&abi::encode_packed(
         &[
-            abi::SolType::Str(&user),
-            abi::SolType::Bytes(token.as_bytes()),
-            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&user),
+            abi::SolType::Bytes(&token),
+            abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
             abi::SolType::Bytes(&dep_msg.dst_chid.to_be_bytes()),
-            abi::SolType::Str(&dep_msg.mint_acnt),
+            abi::SolType::Bytes(&mint_acnt),
             abi::SolType::Bytes(&dep_msg.nonce.to_be_bytes()),
             abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
-            abi::SolType::Bytes(contract_addr.as_bytes())
         ]));
     if DEP_IDS.has(deps.storage, dep_id.clone()) {
         return Err(ContractError::Std(StdError::generic_err("record exists")));
@@ -432,8 +436,8 @@ pub fn do_deposit_native(
     let res = Response::new()
         .add_attribute("action", "deposit")
         .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", deps.api.addr_canonicalize(&user).unwrap().to_string())
-        .add_attribute("token", deps.api.addr_canonicalize(token.as_str()).unwrap().to_string())
+        .add_attribute("from", user.to_string())
+        .add_attribute("token", token.to_string())
         .add_attribute("amount", amount)
         .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
         .add_attribute("mint_acct", dep_msg.mint_acnt);

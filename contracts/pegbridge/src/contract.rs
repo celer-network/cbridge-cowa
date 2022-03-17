@@ -267,7 +267,7 @@ pub fn update_sigchecker(
 pub fn do_burn(
     deps: DepsMut,
     info: MessageInfo,
-    this: Addr, // CW20 pegged token addr
+    _this: Addr, // CW20 pegged token addr
     msg: Cw20BurnMsg,
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
@@ -290,16 +290,18 @@ pub fn do_burn(
     }
 
     let burn_msg: BurnMsg = from_binary(&msg.msg)?;
+    let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
+    let user = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
+    let to_acnt = hex::decode(burn_msg.to_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
     let burn_id = func::keccak256(&abi::encode_packed(
         &[
-            abi::SolType::Str(&user),
-            abi::SolType::Bytes(token.as_bytes()),
-            abi::SolType::Bytes(&amount.u128().to_be_bytes()),
+            abi::SolType::Bytes(&user),
+            abi::SolType::Bytes(&token),
+            abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
             abi::SolType::Bytes(&burn_msg.to_chid.to_be_bytes()),
-            abi::SolType::Str(&burn_msg.to_acnt),
+            abi::SolType::Bytes(&to_acnt),
             abi::SolType::Bytes(&burn_msg.nonce.to_be_bytes()),
             abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
-            abi::SolType::Bytes(this.as_bytes())
         ]));
     if BURN_IDS.has(deps.storage, burn_id.clone()) {
         return Err(ContractError::Std(StdError::generic_err("record exists")));
@@ -309,9 +311,9 @@ pub fn do_burn(
     let res = Response::new()
         .add_attribute("action", "burn")
         .add_attribute("burnid", hex::encode(burn_id)) // calculated burnid
-        .add_attribute("token", deps.api.addr_canonicalize(token.as_str())?.to_string())
+        .add_attribute("token", token.to_string())
         .add_attribute("amount", amount.to_string())
-        .add_attribute("burner", deps.api.addr_canonicalize(user.as_str())?.to_string())
+        .add_attribute("burner", user.to_string())
         .add_attribute("to_chid", burn_msg.to_chid.to_string())
         .add_attribute("to_acnt", burn_msg.to_acnt)
         .add_attribute("nonce", burn_msg.nonce.to_string());
