@@ -115,6 +115,12 @@ pub enum QueryMsg {
     // Return a token's last operation timestamp.
     // Return type: u64
     LastOpTimestamp {token: String},
+    // Return a token's min burn amount.
+    // Return type: u128
+    MinBurn {token: String},
+    // Return a token's max burn amount.
+    // Return type: u128
+    MaxBurn {token: String},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

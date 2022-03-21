@@ -357,6 +357,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::EpochVolume {token} => to_binary(&VOLUME_CONTROL.query_epoch_volume(deps, token)?),
         QueryMsg::EpochVolumeCap {token} => to_binary(&VOLUME_CONTROL.query_epoch_volume_cap(deps, token)?),
         QueryMsg::LastOpTimestamp {token} => to_binary(&VOLUME_CONTROL.query_last_op_timestamp(deps, token)?),
+        QueryMsg::MinBurn {token} => to_binary(&query_min_burn(deps, token)?),
+        QueryMsg::MaxBurn {token} => to_binary(&query_max_burn(deps, token)?),
     }
 }
 
@@ -368,6 +370,16 @@ fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
         sig_checker: state.sig_checker, 
     };
     Ok(resp)
+}
+
+fn query_min_burn(deps: Deps, token: String) -> StdResult<u128> {
+    let token = deps.api.addr_validate(&token)?;
+    MIN_BURN.load(deps.storage, token)
+}
+
+fn query_max_burn(deps: Deps, token: String) -> StdResult<u128> {
+    let token = deps.api.addr_validate(&token)?;
+    MAX_BURN.load(deps.storage, token)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
