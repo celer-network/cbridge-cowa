@@ -203,7 +203,7 @@ pub fn do_withdraw(
         .add_attribute("wd_id", hex::encode(wd_id.clone()))
         .add_attribute("receiver", hex::encode(withdraw.receiver))
         .add_attribute("token", hex::encode(withdraw.token))
-        .add_attribute("amount", hex::encode(withdraw.amount))
+        .add_attribute("amount", amount.to_string())
         .add_attribute("ref_chain_id", withdraw.ref_chain_id.to_string())
         .add_attribute("ref_id", hex::encode(withdraw.ref_id))
         .add_attribute("burn_acct", hex::encode(withdraw.burn_account));

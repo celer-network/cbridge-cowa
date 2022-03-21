@@ -192,7 +192,7 @@ pub fn do_mint(
         .add_attribute("mint_id", hex::encode(mint_id.clone()))
         .add_attribute("token", hex::encode(mint.token))
         .add_attribute("account", hex::encode(mint.account))
-        .add_attribute("amount", hex::encode(mint.amount))
+        .add_attribute("amount", amount.to_string())
         .add_attribute("ref_chain_id", mint.ref_chain_id.to_string())
         .add_attribute("ref_id", hex::encode(mint.ref_id))
         .add_attribute("depositor", hex::encode(mint.depositor));
