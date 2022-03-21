@@ -374,12 +374,20 @@ fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
 
 fn query_min_burn(deps: Deps, token: String) -> StdResult<u128> {
     let token = deps.api.addr_validate(&token)?;
-    MIN_BURN.load(deps.storage, token)
+    if let Ok(amount) = MIN_BURN.load(deps.storage, token) {
+        Ok(amount)
+    } else {
+        Ok(0)
+    }
 }
 
 fn query_max_burn(deps: Deps, token: String) -> StdResult<u128> {
     let token = deps.api.addr_validate(&token)?;
-    MAX_BURN.load(deps.storage, token)
+    if let Ok(amount) = MAX_BURN.load(deps.storage, token) {
+        Ok(amount)
+    } else {
+        Ok(0)
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
