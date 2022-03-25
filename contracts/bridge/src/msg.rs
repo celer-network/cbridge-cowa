@@ -30,6 +30,7 @@ pub enum QueryMsg {
         msg: Binary, 
         sigs: Vec<Binary>
     },
+    ChainSigners {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

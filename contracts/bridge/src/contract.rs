@@ -49,6 +49,7 @@ pub fn execute(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::VerifySigs {msg, sigs} => verify_sigs(deps, msg, sigs),
+        QueryMsg::ChainSigners {} => to_binary(&SIGNERS.get_signer_powers(deps)?),
     }
 }
 

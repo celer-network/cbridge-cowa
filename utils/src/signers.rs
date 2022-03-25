@@ -202,4 +202,8 @@ impl<'a> Signers<'a> {
     pub fn get_state(&self, deps: Deps) -> StdResult<SignersState> {
         self.0.load(deps.storage)
     }
+
+    pub fn get_signer_powers(&self, deps: Deps) -> StdResult<SignerPowers> {
+        self.1.load(deps.storage)
+    }
 }
