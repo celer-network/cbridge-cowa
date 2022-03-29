@@ -61,6 +61,8 @@ pub enum ExecuteMsg {
         pbmsg: Binary,
         sigs: Vec<Binary>,
     },
+    /// This must be called by governor, will allow a new cw20 token to be burn
+    Allow(AllowMsg),
     /// called by a CW20 based test token
     Burn ( Cw20BurnMsg ),
     UpdateMinBurn{ token_addr: String, amount: u128 },
@@ -74,6 +76,12 @@ pub enum ExecuteMsg {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AllowMsg {
+    pub contract: String,
+    pub gas_limit: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct BurnMsg { // user call cw20 based token.burn with this msg
     pub to_chid: u64,
@@ -84,43 +92,45 @@ pub struct BurnMsg { // user call cw20 based token.burn with this msg
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetConfig {}, // return owner, sig checker contract addr and other info, see GetConfigResp
-    // Return if this address is a pauser.
-    // Return type: bool
+    GetConfig {}, /// return owner, sig checker contract addr and other info, see GetConfigResp
+    /// Return if this address is a pauser.
+    /// Return type: bool
     Pauser {address: String},
-    // Return if this contract is paused.
-    // Return type: bool
+    /// Return if this contract is paused.
+    /// Return type: bool
     Paused {},
-    // Return if this address is a governor.
-    // Return type: bool
+    /// Return if this address is a governor.
+    /// Return type: bool
     Governor {address: String},
-    // Return the delay period.
-    // Return type: u64
+    /// Return the delay period.
+    /// Return type: u64
     DelayPeriod {},
-    // Return a token's delay threshold.
-    // Return type: Uint256
+    /// Return a token's delay threshold.
+    /// Return type: Uint256
     DelayThreshold {token: String},
-    // Return the delayed transfer by its id.
-    // Return type: DelayedTransfer::DelayedXfer
+    /// Return the delayed transfer by its id.
+    /// Return type: DelayedTransfer::DelayedXfer
     DelayedTransfer {id: String},
-    // Return the epoch length
-    // Return type: u64
+    /// Return the epoch length
+    /// Return type: u64
     EpochLength {},
-    // Return a token's epoch volume.
-    // Return type: Uint256
+    /// Return a token's epoch volume.
+    /// Return type: Uint256
     EpochVolume {token: String},
-    // Return a token's epoch volume cap.
-    // Return type: Uint256
+    /// Return a token's epoch volume cap.
+    /// Return type: Uint256
     EpochVolumeCap {token: String},
-    // Return a token's last operation timestamp.
-    // Return type: u64
+    /// Return a token's last operation timestamp.
+    /// Return type: u64
     LastOpTimestamp {token: String},
-    // Return a token's min burn amount.
-    // Return type: u128
+    /// Return a token's min burn amount.
+    /// Return type: u128
     MinBurn {token: String},
-    // Return a token's max burn amount.
-    // Return type: u128
+    /// Return a token's max burn amount.
+    /// Return type: u128
     MaxBurn {token: String},
+    /// Query if a given cw20 contract is allowed. Returns AllowedResponse
+    Allowed { contract: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -128,6 +138,12 @@ pub enum QueryMsg {
 pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct AllowedResponse {
+    pub is_allowed: bool,
+    pub gas_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

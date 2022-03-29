@@ -15,6 +15,12 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
+    #[error("You cannot lower the gas limit for a contract on the allow list")]
+    CannotLowerGas,
+
+    #[error("You can only burn cw20 tokens that have been explicitly allowed")]
+    NotOnAllowList,
+
     // OwnerError could happen from owner funcs
     #[error("{0}")]
     Owner(#[from] OwnerError),

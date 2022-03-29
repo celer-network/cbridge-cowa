@@ -5,13 +5,13 @@ use cosmwasm_std::{ContractResult, entry_point, Reply, ReplyOn, SubMsg};
 use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary};
 use cw2::set_contract_version;
 use utils::func::keccak256;
-use cw20::Cw20ExecuteMsg;
+use cw20::{Cw20CoinVerified, Cw20ExecuteMsg};
 use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg, AllowedResponse};
 use crate::pegbridge;
-use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS};
+use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST, AllowInfo};
 
 use utils::{abi, func};
 
@@ -87,8 +87,9 @@ pub fn execute(
         ExecuteMsg::SetEpochVolumeCaps {tokens, caps} => Ok(VOLUME_CONTROL.execute_set_epoch_volume_caps(deps, info, tokens, caps)?),
         // ONLY governor. set epoch length.
         ExecuteMsg::SetEpochLength {length} => Ok(VOLUME_CONTROL.execute_set_epoch_length(deps, info, length)?),
-        
-        ExecuteMsg::Burn (msg) => do_burn(deps, info, env.contract.address, msg),
+
+        ExecuteMsg::Allow(msg) => execute_allow(deps, env, info, msg),
+        ExecuteMsg::Burn (msg) => execute_burn(deps, info, env.contract.address, msg),
         ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, env, pbmsg, sigs),
         ExecuteMsg::UpdateMinBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, true),
         ExecuteMsg::UpdateMaxBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, false),
@@ -264,17 +265,71 @@ pub fn update_sigchecker(
         .add_attribute("newaddr", newaddr))
 }
 
-pub fn do_burn(
+/// Allow new contracts, or increase the gas limit on existing contracts.
+/// gas limit is not actually used.
+pub fn execute_allow(
     deps: DepsMut,
+    _env: Env,
     info: MessageInfo,
-    _this: Addr, // CW20 pegged token addr
-    msg: Cw20BurnMsg,
+    allow: AllowMsg,
 ) -> Result<Response, ContractError> {
+    // must called by governor
+    GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
+
+    let contract = deps.api.addr_validate(&allow.contract)?;
+    let set = AllowInfo {
+        gas_limit: allow.gas_limit,
+    };
+    ALLOW_LIST.update(deps.storage, &contract, |old| {
+        if let Some(old) = old {
+            // we must ensure it increases the limit
+            match (old.gas_limit, set.gas_limit) {
+                (None, Some(_)) => return Err(ContractError::CannotLowerGas),
+                (Some(old), Some(new)) if new < old => return Err(ContractError::CannotLowerGas),
+                _ => {}
+            };
+        }
+        Ok(AllowInfo {
+            gas_limit: allow.gas_limit,
+        })
+    })?;
+
+    let gas = if let Some(gas) = allow.gas_limit {
+        gas.to_string()
+    } else {
+        "None".to_string()
+    };
+
+    let res = Response::new()
+        .add_attribute("action", "allow")
+        .add_attribute("contract", allow.contract)
+        .add_attribute("gas_limit", gas);
+    Ok(res)
+}
+
+pub fn execute_burn(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20BurnMsg) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
-    let token = info.sender; // cw20 contract Addr
-    let user = msg.sender; // user who called our token.burn
-    let amount = msg.amount; // Uint128 amount
+    let msg: BurnMsg = from_binary(&wrapper.msg)?;
+    let amount = Cw20CoinVerified{
+        address: info.sender,
+        amount: wrapper.amount
+    };
+    let api = deps.api;
+    do_burn(deps, msg, amount, api.addr_validate(&wrapper.sender)?)
+}
+
+pub fn do_burn(
+    deps: DepsMut,
+    msg: BurnMsg,
+    amt: Cw20CoinVerified,
+    sender: Addr,
+) -> Result<Response, ContractError> {
+    ALLOW_LIST
+        .may_load(deps.storage, &amt.address)?
+        .ok_or(ContractError::NotOnAllowList)?;
+    let token = amt.address; // cw20 contract Addr
+    let amount = amt.amount; // Uint128 amount
 
     let min = MIN_BURN.may_load(deps.storage, token.clone())?;
     if let Some(min) = min {
@@ -289,18 +344,17 @@ pub fn do_burn(
         }
     }
 
-    let burn_msg: BurnMsg = from_binary(&msg.msg)?;
     let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
-    let user = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
-    let to_acnt = hex::decode(burn_msg.to_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
+    let burner = deps.api.addr_canonicalize(sender.as_str()).unwrap(); // sgnd uses canonical addr
+    let to_acnt = hex::decode(msg.to_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
     let burn_id = func::keccak256(&abi::encode_packed(
         &[
-            abi::SolType::Bytes(&user),
+            abi::SolType::Bytes(&burner),
             abi::SolType::Bytes(&token),
             abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
-            abi::SolType::Bytes(&burn_msg.to_chid.to_be_bytes()),
+            abi::SolType::Bytes(&msg.to_chid.to_be_bytes()),
             abi::SolType::Bytes(&to_acnt),
-            abi::SolType::Bytes(&burn_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&msg.nonce.to_be_bytes()),
             abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
         ]));
     if BURN_IDS.has(deps.storage, burn_id.clone()) {
@@ -313,10 +367,10 @@ pub fn do_burn(
         .add_attribute("burnid", hex::encode(burn_id)) // calculated burnid
         .add_attribute("token", token.to_string())
         .add_attribute("amount", amount.to_string())
-        .add_attribute("burner", user.to_string())
-        .add_attribute("to_chid", burn_msg.to_chid.to_string())
-        .add_attribute("to_acnt", burn_msg.to_acnt)
-        .add_attribute("nonce", burn_msg.nonce.to_string());
+        .add_attribute("burner", burner.to_string())
+        .add_attribute("to_chid", msg.to_chid.to_string())
+        .add_attribute("to_acnt", msg.to_acnt)
+        .add_attribute("nonce", msg.nonce.to_string());
     Ok(res)
 }
 
@@ -359,6 +413,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::LastOpTimestamp {token} => to_binary(&VOLUME_CONTROL.query_last_op_timestamp(deps, token)?),
         QueryMsg::MinBurn {token} => to_binary(&query_min_burn(deps, token)?),
         QueryMsg::MaxBurn {token} => to_binary(&query_max_burn(deps, token)?),
+        QueryMsg::Allowed { contract } => to_binary(&query_allowed(deps, contract)?),
     }
 }
 
@@ -388,6 +443,22 @@ fn query_max_burn(deps: Deps, token: String) -> StdResult<u128> {
     } else {
         Ok(0)
     }
+}
+
+fn query_allowed(deps: Deps, contract: String) -> StdResult<AllowedResponse> {
+    let addr = deps.api.addr_validate(&contract)?;
+    let info = ALLOW_LIST.may_load(deps.storage, &addr)?;
+    let res = match info {
+        None => AllowedResponse {
+            is_allowed: false,
+            gas_limit: None,
+        },
+        Some(a) => AllowedResponse {
+            is_allowed: true,
+            gas_limit: a.gas_limit,
+        },
+    };
+    Ok(res)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
