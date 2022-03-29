@@ -6,13 +6,13 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, CanonicalAddr, BankMsg, coin, Uint256};
 use cw2::set_contract_version;
 
-use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg};
+use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg, Cw20CoinVerified};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg, MigrateMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg, MigrateMsg, AllowMsg, AllowedResponse};
 use crate::vault;
 
-use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL};
+use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL, AllowInfo, ALLOW_LIST};
 
 use utils::{abi, func};
 
@@ -96,11 +96,12 @@ pub fn execute(
         ExecuteMsg::UpdateMaxDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, false),
 
         ExecuteMsg::UpdateNativeTokens { native_tokens } => update_native_tokens(deps, info, native_tokens),
-        
+
+        ExecuteMsg::Allow(msg) => execute_allow(deps, env, info, msg),
         // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
         // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
         // what about deposit id collision? same issue exists in solidity
-        ExecuteMsg::Receive(msg) => do_deposit(deps, info, env.contract.address, msg),
+        ExecuteMsg::Receive(msg) => execute_deposit(deps, info, env.contract.address, msg),
 
         // Deposit native token, e.g., LUNA and UST
         ExecuteMsg::DepositNative(msg) => do_deposit_native(deps, info, env.contract.address, msg),
@@ -321,17 +322,68 @@ pub fn update_native_tokens(
         .add_attribute("native_tokens", serde_json_wasm::to_string(&native_tokens).unwrap()))
 }
 
-pub fn do_deposit(
+/// Allow new contracts, or increase the gas limit on existing contracts.
+/// gas limit is not actually used.
+pub fn execute_allow(
     deps: DepsMut,
+    _env: Env,
     info: MessageInfo,
-    _contract_addr: Addr,
-    wrapped: Cw20ReceiveMsg,
+    allow: AllowMsg,
 ) -> Result<Response, ContractError> {
+    // must called by governor
+    GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
+
+    let contract = deps.api.addr_validate(&allow.contract)?;
+    let set = AllowInfo {
+        gas_limit: allow.gas_limit,
+    };
+    ALLOW_LIST.update(deps.storage, &contract, |old| {
+        if let Some(old) = old {
+            // we must ensure it increases the limit
+            match (old.gas_limit, set.gas_limit) {
+                (None, Some(_)) => return Err(ContractError::CannotLowerGas),
+                (Some(old), Some(new)) if new < old => return Err(ContractError::CannotLowerGas),
+                _ => {}
+            };
+        }
+        Ok(AllowInfo {
+            gas_limit: allow.gas_limit,
+        })
+    })?;
+
+    let gas = if let Some(gas) = allow.gas_limit {
+        gas.to_string()
+    } else {
+        "None".to_string()
+    };
+
+    let res = Response::new()
+        .add_attribute("action", "allow")
+        .add_attribute("contract", allow.contract)
+        .add_attribute("gas_limit", gas);
+    Ok(res)
+}
+
+pub fn execute_deposit(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20ReceiveMsg) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
-    let token = info.sender; // cw20 contract Addr
-    let user = wrapped.sender; // user who called cw20.send
-    let amount = wrapped.amount; // Uint128 amount
+    let msg: DepositMsg = from_binary(&wrapper.msg)?;
+    let amount = Cw20CoinVerified{
+        address: info.sender,
+        amount: wrapper.amount
+    };
+    let api = deps.api;
+    do_deposit(deps, msg, amount, api.addr_validate(&wrapper.sender)?)
+}
+
+pub fn do_deposit(
+    deps: DepsMut,
+    msg: DepositMsg,
+    amt: Cw20CoinVerified,
+    sender: Addr,
+) -> Result<Response, ContractError> {
+    let token = amt.address; // cw20 contract Addr
+    let amount = amt.amount; // Uint128 amount
 
     let min = MIN_DEPOSIT.may_load(deps.storage, token.clone())?;
     if let Some(min) = min {
@@ -346,18 +398,17 @@ pub fn do_deposit(
         }
     }
 
-    let dep_msg: DepositMsg = from_binary(&wrapped.msg)?;
     let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
-    let user = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
-    let mint_acnt = hex::decode(dep_msg.mint_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
+    let depositor = deps.api.addr_canonicalize(sender.as_str()).unwrap(); // sgnd uses canonical addr
+    let mint_acnt = hex::decode(msg.mint_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
     let dep_id = func::keccak256(&abi::encode_packed(
         &[
-            abi::SolType::Bytes(&user),
+            abi::SolType::Bytes(&depositor),
             abi::SolType::Bytes(&token),
             abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
-            abi::SolType::Bytes(&dep_msg.dst_chid.to_be_bytes()),
+            abi::SolType::Bytes(&msg.dst_chid.to_be_bytes()),
             abi::SolType::Bytes(&mint_acnt),
-            abi::SolType::Bytes(&dep_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&msg.nonce.to_be_bytes()),
             abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
         ]));
     if DEP_IDS.has(deps.storage, dep_id.clone()) {
@@ -368,11 +419,11 @@ pub fn do_deposit(
     let res = Response::new()
         .add_attribute("action", "deposit")
         .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", user.to_string())
+        .add_attribute("from", depositor.to_string())
         .add_attribute("token", token.to_string())
         .add_attribute("amount", amount)
-        .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
-        .add_attribute("mint_acct", dep_msg.mint_acnt);
+        .add_attribute("dst_chid", msg.dst_chid.to_string())
+        .add_attribute("mint_acct", msg.mint_acnt);
     Ok(res)
 }
 
@@ -460,6 +511,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::LastOpTimestamp {token} => to_binary(&VOLUME_CONTROL.query_last_op_timestamp(deps, token)?),
         QueryMsg::MinDeposit {token} => to_binary(&query_min_deposit(deps, token)?),
         QueryMsg::MaxDeposit {token} => to_binary(&query_max_deposit(deps, token)?),
+        QueryMsg::Allowed { contract } => to_binary(&query_allowed(deps, contract)?),
     }
 }
 
@@ -489,6 +541,22 @@ fn query_max_deposit(deps: Deps, token: String) -> StdResult<u128> {
     } else {
         Ok(0)
     }
+}
+
+fn query_allowed(deps: Deps, contract: String) -> StdResult<AllowedResponse> {
+    let addr = deps.api.addr_validate(&contract)?;
+    let info = ALLOW_LIST.may_load(deps.storage, &addr)?;
+    let res = match info {
+        None => AllowedResponse {
+            is_allowed: false,
+            gas_limit: None,
+        },
+        Some(a) => AllowedResponse {
+            is_allowed: true,
+            gas_limit: a.gas_limit,
+        },
+    };
+    Ok(res)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
