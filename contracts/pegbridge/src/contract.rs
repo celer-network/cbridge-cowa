@@ -414,6 +414,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::MinBurn {token} => to_binary(&query_min_burn(deps, token)?),
         QueryMsg::MaxBurn {token} => to_binary(&query_max_burn(deps, token)?),
         QueryMsg::Allowed { contract } => to_binary(&query_allowed(deps, contract)?),
+        QueryMsg::Record {id, is_burn} => to_binary(&query_record(deps, id, is_burn)?),
     }
 }
 
@@ -459,6 +460,18 @@ fn query_allowed(deps: Deps, contract: String) -> StdResult<AllowedResponse> {
         },
     };
     Ok(res)
+}
+
+fn query_record(deps: Deps, id_str: String, is_burn: bool) -> StdResult<bool> {
+    if let Ok(id) = hex::decode(id_str) {
+        if is_burn {
+            Ok(BURN_IDS.has(deps.storage, id.clone()))
+        } else {
+            Ok(MINT_IDS.has(deps.storage, id.clone()))
+        }
+    } else {
+        Err(StdError::generic_err("cannot convert id from hex into byte array"))
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

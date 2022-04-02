@@ -131,6 +131,9 @@ pub enum QueryMsg {
     MaxBurn {token: String},
     /// Query if a given cw20 contract is allowed. Returns AllowedResponse
     Allowed { contract: String },
+    /// Return if a transfer id is recorded.
+    /// Return type: bool
+    Record {id: String, is_burn: bool}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
