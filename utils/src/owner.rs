@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn init_set() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn assert_owner() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn update_owner() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let obj = Owner::new("owner");
         
         let owner_addr = Addr::unchecked("owner_addr");

@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use std::ops::Deref;
 use std::str::FromStr;
-use cosmwasm_std::{ContractResult, entry_point, Reply, ReplyOn, SubMsg};
+use cosmwasm_std::{SubMsgResult, entry_point, Reply, ReplyOn, SubMsg};
 use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary};
 use cw2::set_contract_version;
 use utils::func::keccak256;
@@ -485,8 +485,8 @@ pub fn reply(_deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, Contract
     match msg.id {
         _ => {
             match msg.result {
-                ContractResult::Ok(_) => Ok(Response::new()),
-                ContractResult::Err(err) => Err(ContractError::Std(StdError::generic_err(err)))
+                SubMsgResult::Ok(_) => Ok(Response::new()),
+                SubMsgResult::Err(err) => Err(ContractError::Std(StdError::generic_err(err)))
             }
         }
     }
@@ -500,7 +500,7 @@ mod tests {
 
     #[test]
     fn instantiate_test() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let signer_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
         let msg = InstantiateMsg { sig_checker: signer_addr };

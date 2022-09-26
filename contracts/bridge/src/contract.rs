@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let msg = InstantiateMsg{};
         let info = mock_info("creator", &[]);
 
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn update_signers() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let info = mock_info("creator", &[]);
         let env = mock_env();
         instantiate(deps.as_mut(), env.clone(), info.clone(), InstantiateMsg{}).unwrap();

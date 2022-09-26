@@ -586,7 +586,7 @@ mod tests {
 
     #[test]
     fn instantiate_test() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let owner_addr = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let signer_addr = Addr::unchecked("0x7F4A47e039328F95deC1919aA557E998774eD8dA");
         let msg = InstantiateMsg{ sig_checker: signer_addr };

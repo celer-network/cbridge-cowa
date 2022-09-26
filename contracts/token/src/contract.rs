@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
         let bridge = Addr::unchecked("0x6F4A47e039328F95deC1919aA557E998774eD8dA");
         let msg = InstantiateMsg {
             name: "Integers".to_string(),

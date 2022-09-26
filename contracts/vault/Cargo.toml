@@ -23,12 +23,12 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-cosmwasm-std = { version = "0.16.2" }
-cosmwasm-storage = { version = "0.16.2" }
-cw-controllers = { version = "0.8.1" }
-cw-storage-plus = { version = "0.8.1" }
-cw2 = { version = "0.8.1" }
-cw20 = "0.8.1"
+cosmwasm-std = { version = "1.0.0" }
+cosmwasm-storage = { version = "1.0.0" }
+cw-controllers = { version = "0.13.2" }
+cw-storage-plus = { version = "0.13.2" }
+cw2 = { version = "0.13.2" }
+cw20 = "0.13.2"
 schemars = "0.8.3"
 serde = { version = "1.0.127", default-features = false, features = ["derive"] }
 serde-json-wasm = "0.3.2"
@@ -42,7 +42,7 @@ hex = "0.4"
 utils = { path = "../../utils", version = "0.1.0" }
 
 [dev-dependencies]
-cosmwasm-schema = { version = "0.16.2" }
+cosmwasm-schema = { version = "1.0.0" }
 
 [build-dependencies]
 #prost-build = "0.9"
