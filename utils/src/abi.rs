@@ -17,7 +17,7 @@ pub enum SolType<'a> {
 
 pub type Word = [u8; 32];
 
-pub const CHAIN_ID: u64 = 999999999;
+pub const CHAIN_ID: u64 = 999999998;
 
 pub fn encode_packed(items: &[SolType]) -> Vec<u8> {
     let raw = items.iter().fold(Vec::new(), |mut acc, i| {

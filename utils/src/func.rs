@@ -43,7 +43,7 @@ pub fn get_domain(contract_addr: CanonicalAddr, method: &str) -> Vec<u8> {
     keccak256(&abi::encode_packed(
         &[
             abi::SolType::Uint256(&cosmwasm_std::Uint256::from(abi::CHAIN_ID).to_be_bytes()), 
-            abi::SolType::Addr(contract_addr.as_slice()[0..20].try_into().unwrap()),
+            abi::SolType::Bytes(contract_addr.as_slice().try_into().unwrap()),
             abi::SolType::Str(method)
         ]))
 }
