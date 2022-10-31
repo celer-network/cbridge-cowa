@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -208,6 +209,58 @@ func (c *CosClient) GetBlockTs() (time.Time, error) {
 	} else {
 		return time.Now(), fmt.Errorf("fail to get terra cur blk ts")
 	}
+}
+
+func (c *CosClient) QuerySsHash() (ec.Hash, error) {
+	return ec.Hash{}, nil
+}
+
+func (c *CosClient) PauseVault() error {
+	return nil
+}
+
+func (c *CosClient) PausePegBridge() error {
+	return nil
+}
+
+func (c *CosClient) QueryVaultRecordExist() (bool, error) {
+	return false, nil
+}
+
+func (c *CosClient) QueryPegBridgeRecordExist() (bool, error) {
+	return false, nil
+}
+
+func (c *CosClient) QueryPegBridgeCoinEpochVolume() (*big.Int, error) {
+	return nil, nil
+}
+
+func (c *CosClient) QueryVaultTokenConfig() (*big.Int, *big.Int, *big.Int, *big.Int, error) {
+	return nil, nil, nil, nil, nil
+}
+
+func (c *CosClient) QueryPegBridgeTokenConfig() (*big.Int, *big.Int, *big.Int, *big.Int, error) {
+	return nil, nil, nil, nil, nil
+}
+
+func (c *CosClient) QueryTokenSupply() (*big.Int, error) {
+	return nil, nil
+}
+
+func (c *CosClient) QueryVolumeLastOpTimestamp() (uint64, error) {
+	return 0, nil
+}
+
+func (c *CosClient) QueryVolumeEpochLength() (uint64, error) {
+	return 0, nil
+}
+
+func (c *CosClient) QueryTxGasCost() (*big.Int, error) {
+	return nil, nil
+}
+
+func (c *CosClient) QueryVaultBalance() (*big.Int, error) {
+	return nil, nil
 }
 
 func (c *CosClient) DelayTransferExist(id ec.Hash, contractCanonicalAddr string) (bool, error) {
