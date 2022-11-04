@@ -223,43 +223,47 @@ func (c *CosClient) PausePegBridge() error {
 	return nil
 }
 
-func (c *CosClient) QueryVaultRecordExist() (bool, error) {
+func (c *CosClient) UnpauseVault() error {
+	return nil
+}
+
+func (c *CosClient) UnpausePegBridge() error {
+	return nil
+}
+
+func (c *CosClient) QueryVaultRecordExist(id ec.Hash, isDeposit bool) (bool, error) {
 	return false, nil
 }
 
-func (c *CosClient) QueryPegBridgeRecordExist() (bool, error) {
+func (c *CosClient) QueryPegBridgeRecordExist(id ec.Hash, isBurn bool) (bool, error) {
 	return false, nil
 }
 
-func (c *CosClient) QueryPegBridgeCoinEpochVolume() (*big.Int, error) {
+func (c *CosClient) QueryPegBridgeCoinEpochVolume(token string) (*big.Int, error) {
 	return nil, nil
 }
 
-func (c *CosClient) QueryVaultTokenConfig() (*big.Int, *big.Int, *big.Int, *big.Int, error) {
-	return nil, nil, nil, nil, nil
-}
-
-func (c *CosClient) QueryPegBridgeTokenConfig() (*big.Int, *big.Int, *big.Int, *big.Int, error) {
-	return nil, nil, nil, nil, nil
-}
-
-func (c *CosClient) QueryTokenSupply() (*big.Int, error) {
+func (c *CosClient) QueryEpochVolumeCap(token string) (*big.Int, error) {
 	return nil, nil
 }
 
-func (c *CosClient) QueryVolumeLastOpTimestamp() (uint64, error) {
+func (c *CosClient) QueryVolumeLastOpTimestamp(token string) (uint64, error) {
 	return 0, nil
 }
 
-func (c *CosClient) QueryVolumeEpochLength() (uint64, error) {
+func (c *CosClient) QueryVolumeEpochLength(token string) (uint64, error) {
 	return 0, nil
 }
 
-func (c *CosClient) QueryTxGasCost() (*big.Int, error) {
+func (c *CosClient) QueryTokenSupply(token string) (*big.Int, error) {
 	return nil, nil
 }
 
-func (c *CosClient) QueryVaultBalance() (*big.Int, error) {
+func (c *CosClient) QueryTxGasCost(txHash ec.Hash) (*big.Int, error) {
+	return nil, nil
+}
+
+func (c *CosClient) QueryVaultBalance(token string) (*big.Int, error) {
 	return nil, nil
 }
 
