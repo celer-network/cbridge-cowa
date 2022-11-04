@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	lens "github.com/strangelove-ventures/lens/client"
 )
 
@@ -53,60 +52,6 @@ func SmartContractState(cc *lens.ChainClient, msgPackage string, in *QuerySmartC
 func BankBalance(cc *lens.ChainClient, msgPackage string, in *QueryBalanceRequest) (*QueryBalanceResponse, error) {
 	out := new(QueryBalanceResponse)
 	err := cc.Invoke(context.Background(), "/"+msgPackage+".Query/Balance", in, out, nil)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func ChainSigners(cc *lens.ChainClient, contractAddr sdk.AccAddress, msgPackage string) (*WasmQueryResponseSigners, error) {
-	out := new(WasmQueryResponseSigners)
-	msgbz, _ := json.Marshal(&WasmQueryRequestSigners{})
-	req := &QuerySmartContractStateRequest{
-		Address:   cc.MustEncodeAccAddr(contractAddr),
-		QueryData: msgbz,
-	}
-	resp, err := SmartContractState(cc, msgPackage, req)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(resp.Data, out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func QueryOTVRecord(cc *lens.ChainClient, contractAddr sdk.AccAddress, id string, is_deposit bool, msgPackage string) (*WasmQueryOTVRecordResponse, error) {
-	out := new(WasmQueryOTVRecordResponse)
-	queryMsg, _ := json.Marshal(&WasmQueryOTVRecordRequest{Record: OTVRecord{Id: id, IsDeposit: is_deposit}})
-	req := &QuerySmartContractStateRequest{
-		Address:   cc.MustEncodeAccAddr(contractAddr),
-		QueryData: queryMsg,
-	}
-	resp, err := SmartContractState(cc, msgPackage, req)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(resp.Data, out)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func QueryPTBRecord(cc *lens.ChainClient, contractAddr sdk.AccAddress, id string, is_burn bool, msgPackage string) (*WasmQueryPTBRecordResponse, error) {
-	out := new(WasmQueryPTBRecordResponse)
-	queryMsg, _ := json.Marshal(&WasmQueryPTBRecordRequest{Record: PTBRecord{Id: id, IsBurn: is_burn}})
-	req := &QuerySmartContractStateRequest{
-		Address:   cc.MustEncodeAccAddr(contractAddr),
-		QueryData: queryMsg,
-	}
-	resp, err := SmartContractState(cc, msgPackage, req)
-	if err != nil {
-		return nil, err
-	}
-	err = json.Unmarshal(resp.Data, out)
 	if err != nil {
 		return nil, err
 	}

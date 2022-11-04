@@ -235,7 +235,7 @@ func (c *CosClient) IsPegBridgePaused() (bool, error) {
 func (c *CosClient) IsPaused(contractCanonicalAddr string) (bool, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
