@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/celer-network/goutils/log"
-	"github.com/celer-network/sgn-v2/common"
-	commontypes "github.com/celer-network/sgn-v2/common/types"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	tmclient "github.com/cosmos/ibc-go/v2/modules/light-clients/07-tendermint/types"
@@ -33,17 +32,31 @@ type CosClient struct {
 	MsgPackage string // if provided, with replace the package of the Any typeUrl of the sdk.Msg
 }
 
-func NewCosClient(cfg *common.OneChainConfig, homeDir, keyringBackend, transactor_passphrase string) *CosClient {
-	if !commontypes.IsCosChain(cfg.ChainID) {
-		log.Fatalf("find invalid cosmos chainId:%d", cfg.ChainID)
-	}
+type CosConfig struct {
+	ChainId              uint64
+	RawChainID           string
+	Key                  string
+	AccountPrefix        string
+	Endpoint             string
+	BridgeAddr           string
+	PegBridgeAddr        string
+	VaultBridgeAddr      string
+	MsgPackage           string
+	KeyringBackend       string
+	TransactorPassphrase string
+	GasAdjustment        float64
+	GasPrices            string
+	Timeout              string
+	HomeDir              string
+}
 
+func NewCosClient(cfg *CosConfig) *CosClient {
 	ret := &CosClient{
-		ChainID:       cfg.ChainID,
+		ChainID:       cfg.ChainId,
 		RawChainID:    cfg.RawChainID,
-		BridgeAddr:    cfg.CBridge,
-		VaultAddr:     cfg.OTVault,
-		PegBridgeAddr: cfg.PTBridge,
+		BridgeAddr:    cfg.BridgeAddr,
+		VaultAddr:     cfg.PegBridgeAddr,
+		PegBridgeAddr: cfg.VaultBridgeAddr,
 		MsgPackage:    cfg.MsgPackage,
 	}
 
@@ -60,9 +73,9 @@ func NewCosClient(cfg *common.OneChainConfig, homeDir, keyringBackend, transacto
 	chainClientConfig := &lens.ChainClientConfig{
 		Key:            cfg.Key,
 		ChainID:        cfg.RawChainID,
-		RPCAddr:        cfg.Gateway,
+		RPCAddr:        cfg.Endpoint,
 		AccountPrefix:  cfg.AccountPrefix,
-		KeyringBackend: keyringBackend,
+		KeyringBackend: cfg.KeyringBackend,
 		GasAdjustment:  cfg.GasAdjustment,
 		GasPrices:      cfg.GasPrices,
 		Debug:          true,
@@ -72,8 +85,8 @@ func NewCosClient(cfg *common.OneChainConfig, homeDir, keyringBackend, transacto
 		Modules:        append([]module.AppModuleBasic{}, lens.ModuleBasics...),
 	}
 
-	reader := strings.NewReader(transactor_passphrase + "\n")
-	cc, err := lens.NewChainClient(chainClientConfig, homeDir, reader, os.Stdout)
+	reader := strings.NewReader(cfg.TransactorPassphrase + "\n")
+	cc, err := lens.NewChainClient(chainClientConfig, cfg.HomeDir, reader, os.Stdout)
 	if err != nil {
 		log.Fatalf("init chain client err: %s", err.Error())
 	}
@@ -211,11 +224,8 @@ func (c *CosClient) GetBlockTs() (time.Time, error) {
 	}
 }
 
-func (c *CosClient) QuerySsHash() (ec.Hash, error) {
-	return ec.Hash{}, nil
-}
-
 func (c *CosClient) PauseVault() error {
+
 	return nil
 }
 
@@ -272,11 +282,11 @@ func (c *CosClient) DelayTransferExist(id ec.Hash, contractCanonicalAddr string)
 	if err != nil {
 		return false, err
 	}
-	request := &commontypes.QuerySmartContractStateRequest{
+	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
 		QueryData: []byte(fmt.Sprintf("{\"delayed_transfer\":{\"id\":\"%x\"}}", id)),
 	}
-	_, err = commontypes.SmartContractState(c.Cc, c.MsgPackage, request)
+	_, err = SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
 		if strings.Contains(err.Error(), "DelayedXfer not found") {
 			return false, nil
@@ -291,11 +301,11 @@ func (c *CosClient) GetDelayThreshold(contractCanonicalAddr string) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	request := &commontypes.QuerySmartContractStateRequest{
+	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
 		QueryData: []byte("{\"delay_period\":{}}"),
 	}
-	resp, err := commontypes.SmartContractState(c.Cc, c.MsgPackage, request)
+	resp, err := SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
 		return 0, err
 	}
@@ -305,6 +315,15 @@ func (c *CosClient) GetDelayThreshold(contractCanonicalAddr string) (int64, erro
 		return 0, err
 	}
 	return period, nil
+}
+
+func SmartContractState(cc *lens.ChainClient, msgPackage string, in *types.QuerySmartContractStateRequest) (*types.QuerySmartContractStateResponse, error) {
+	out := new(types.QuerySmartContractStateResponse)
+	err := cc.Invoke(context.Background(), "/"+msgPackage+".Query/SmartContractState", in, out, nil)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *CosClient) ExecuteDelay(id ec.Hash, contractCanonicalAddr string) (string, error) {
@@ -318,12 +337,11 @@ func (c *CosClient) ExecuteDelay(id ec.Hash, contractCanonicalAddr string) (stri
 		log.Errorf("err:%v", err)
 		return "", err
 	}
-	msg := &commontypes.MsgExecuteContract{
-		Sender:       senderAddr,
-		Contract:     contractHumanAddr,
-		ExecuteMsg:   []byte(fmt.Sprintf(`{"execute_delayed_transfer":{"id":"%x"}}`, id)),
-		Coins:        nil,
-		SenderPrefix: c.Cc.Config.AccountPrefix,
+	msg := &types.MsgExecuteContract{
+		Sender:   senderAddr,
+		Contract: contractHumanAddr,
+		Msg:      []byte(fmt.Sprintf(`{"execute_delayed_transfer":{"id":"%x"}}`, id)),
+		Funds:    nil,
 	}
 	resp, err := c.Cc.SendMsgWithPackageName(context.Background(), msg, &c.MsgPackage)
 	if err != nil {
