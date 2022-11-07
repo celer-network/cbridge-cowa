@@ -61,10 +61,3 @@ pub const WD_IDS: Map<Vec<u8>, bool> = Map::new("wd_ids");
 
 pub const MIN_DEPOSIT: Map<Addr, u128> = Map::new("min_deposit");
 pub const MAX_DEPOSIT: Map<Addr, u128> = Map::new("max_deposit");
-/// Every cw20 contract we allow to be sent is stored here, possibly with a gas_limit
-pub const ALLOW_LIST: Map<&Addr, AllowInfo> = Map::new("allow_list");
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct AllowInfo {
-    pub gas_limit: Option<u64>,
-}

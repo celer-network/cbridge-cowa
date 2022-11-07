@@ -133,7 +133,7 @@ impl<'a> Signers<'a> {
     /// contract_addr will be 12..32 of the hash of the addr
     pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[String], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
-        if signer_state.trigger_time >= trigger_time {
+        if signer_state.trigger_time >= trigger_time + 3600 {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
         }
 

@@ -9,10 +9,10 @@ use cw2::set_contract_version;
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg, Cw20CoinVerified};
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg, MigrateMsg, AllowMsg, AllowedResponse};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg, MigrateMsg};
 use crate::vault;
 
-use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL, AllowInfo, ALLOW_LIST};
+use crate::state::{State, STATE, PAUSER, DEP_IDS, WD_IDS, MIN_DEPOSIT, MAX_DEPOSIT, OWNER, GOVERNOR, DELAYED_TRANSFER, VOLUME_CONTROL};
 
 use utils::{abi, func};
 
@@ -97,14 +97,13 @@ pub fn execute(
 
         ExecuteMsg::UpdateNativeTokens { native_tokens } => update_native_tokens(deps, info, native_tokens),
 
-        ExecuteMsg::Allow(msg) => execute_allow(deps, env, info, msg),
         // cw20 Receive for user deposit, should be called by some cw20 contract, but no guarantee
         // we don't care. because in solidity, anyone can call deposit w/ rogue erc20 contract
         // what about deposit id collision? same issue exists in solidity
         ExecuteMsg::Receive(msg) => execute_deposit(deps, info, env.contract.address, msg),
 
         // Deposit native token, e.g., LUNA and UST
-        ExecuteMsg::DepositNative(msg) => do_deposit_native(deps, info, env.contract.address, msg),
+        ExecuteMsg::DepositNative(msg) => do_deposit_native(deps, info, msg),
 
         // info.sender could be anyone, withdraw fund works as long as sigs are valid and wdid doesn't exist
         ExecuteMsg::Withdraw {pbmsg, sigs} => do_withdraw(deps, env, pbmsg, sigs),
@@ -113,11 +112,20 @@ pub fn execute(
         ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
 
         // emit an evnet
-        ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), method, params),
+        ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), env, info, method, params),
     }
 }
 
-pub fn do_emit_event(deps: Deps, method: String, params: Vec<Binary>) -> Result<Response, ContractError> {
+pub fn do_emit_event(
+    deps: Deps,
+    env: Env,
+    info: MessageInfo,
+    method: String,
+    params: Vec<Binary>
+) -> Result<Response, ContractError> {
+    if info.sender.ne(&env.contract.address) {
+        return Err(ContractError::Std(StdError::generic_err("only called by self")));
+    }
     match method.as_str() {
         "delayed_transfer_added" => {
             if params.len() != 1 {
@@ -322,48 +330,6 @@ pub fn update_native_tokens(
         .add_attribute("native_tokens", serde_json_wasm::to_string(&native_tokens).unwrap()))
 }
 
-/// Allow new contracts, or increase the gas limit on existing contracts.
-/// gas limit is not actually used.
-pub fn execute_allow(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    allow: AllowMsg,
-) -> Result<Response, ContractError> {
-    // must called by governor
-    GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
-
-    let contract = deps.api.addr_validate(&allow.contract)?;
-    let set = AllowInfo {
-        gas_limit: allow.gas_limit,
-    };
-    ALLOW_LIST.update(deps.storage, &contract, |old| {
-        if let Some(old) = old {
-            // we must ensure it increases the limit
-            match (old.gas_limit, set.gas_limit) {
-                (None, Some(_)) => return Err(ContractError::CannotLowerGas),
-                (Some(old), Some(new)) if new < old => return Err(ContractError::CannotLowerGas),
-                _ => {}
-            };
-        }
-        Ok(AllowInfo {
-            gas_limit: allow.gas_limit,
-        })
-    })?;
-
-    let gas = if let Some(gas) = allow.gas_limit {
-        gas.to_string()
-    } else {
-        "None".to_string()
-    };
-
-    let res = Response::new()
-        .add_attribute("action", "allow")
-        .add_attribute("contract", allow.contract)
-        .add_attribute("gas_limit", gas);
-    Ok(res)
-}
-
 pub fn execute_deposit(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20ReceiveMsg) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
@@ -430,7 +396,6 @@ pub fn do_deposit(
 pub fn do_deposit_native(
     deps: DepsMut,
     info: MessageInfo,
-    _contract_addr: Addr,
     dep_msg: DepositMsg,
 ) -> Result<Response, ContractError> {
     // solidity modifier whenNotPaused
@@ -511,7 +476,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::LastOpTimestamp {token} => to_binary(&VOLUME_CONTROL.query_last_op_timestamp(deps, token)?),
         QueryMsg::MinDeposit {token} => to_binary(&query_min_deposit(deps, token)?),
         QueryMsg::MaxDeposit {token} => to_binary(&query_max_deposit(deps, token)?),
-        QueryMsg::Allowed { contract } => to_binary(&query_allowed(deps, contract)?),
         QueryMsg::Record {id, is_deposit} => to_binary(&query_record(deps, id, is_deposit)?),
     }
 }
@@ -542,22 +506,6 @@ fn query_max_deposit(deps: Deps, token: String) -> StdResult<u128> {
     } else {
         Ok(0)
     }
-}
-
-fn query_allowed(deps: Deps, contract: String) -> StdResult<AllowedResponse> {
-    let addr = deps.api.addr_validate(&contract)?;
-    let info = ALLOW_LIST.may_load(deps.storage, &addr)?;
-    let res = match info {
-        None => AllowedResponse {
-            is_allowed: false,
-            gas_limit: None,
-        },
-        Some(a) => AllowedResponse {
-            is_allowed: true,
-            gas_limit: a.gas_limit,
-        },
-    };
-    Ok(res)
 }
 
 fn query_record(deps: Deps, id_str: String, is_deposit: bool) -> StdResult<bool> {

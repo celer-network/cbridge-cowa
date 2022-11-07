@@ -68,8 +68,6 @@ pub enum ExecuteMsg {
         sigs: Vec<Binary>,
     },
 
-    /// This must be called by governor, will allow a new cw20 token to be sent
-    Allow(AllowMsg),
     /// to be called by cw20 token contract for user deposit
     /// Cw20ReceiveMsg.msg is Deposit
     Receive(cw20::Cw20ReceiveMsg),
@@ -80,12 +78,6 @@ pub enum ExecuteMsg {
         method: String,
         params: Vec<Binary>,
     },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct AllowMsg {
-    pub contract: String,
-    pub gas_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -136,8 +128,6 @@ pub enum QueryMsg {
     /// Return a token's max deposit amount.
     /// Return type: u128
     MaxDeposit {token: String},
-    /// Query if a given cw20 contract is allowed. Returns AllowedResponse
-    Allowed { contract: String },
     /// Return if a transfer id is recorded.
     /// Return type: bool
     Record {id: String, is_deposit: bool}
@@ -148,12 +138,6 @@ pub enum QueryMsg {
 pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct AllowedResponse {
-    pub is_allowed: bool,
-    pub gas_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

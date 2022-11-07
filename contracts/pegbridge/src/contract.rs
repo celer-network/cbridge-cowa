@@ -9,9 +9,9 @@ use cw20::{Cw20CoinVerified, Cw20ExecuteMsg};
 use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg, AllowedResponse};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg};
 use crate::pegbridge;
-use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST, AllowInfo};
+use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST};
 
 use utils::{abi, func};
 
@@ -98,11 +98,20 @@ pub fn execute(
         ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
 
         // emit an evnet
-        ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), method, params),
+        ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), env, info, method, params),
     }
 }
 
-pub fn do_emit_event(deps: Deps, method: String, params: Vec<Binary>) -> Result<Response, ContractError> {
+pub fn do_emit_event(
+    deps: Deps,
+    env: Env,
+    info: MessageInfo,
+    method: String,
+    params: Vec<Binary>
+) -> Result<Response, ContractError> {
+    if info.sender.ne(&env.contract.address) {
+        return Err(ContractError::Std(StdError::generic_err("only called by self")));
+    }
     match method.as_str() {
         "delayed_transfer_added" => {
             if params.len() != 1 {
@@ -265,8 +274,7 @@ pub fn update_sigchecker(
         .add_attribute("newaddr", newaddr))
 }
 
-/// Allow new contracts, or increase the gas limit on existing contracts.
-/// gas limit is not actually used.
+/// Allow new contracts(allow new token to be burnable).
 pub fn execute_allow(
     deps: DepsMut,
     _env: Env,
@@ -277,33 +285,11 @@ pub fn execute_allow(
     GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
 
     let contract = deps.api.addr_validate(&allow.contract)?;
-    let set = AllowInfo {
-        gas_limit: allow.gas_limit,
-    };
-    ALLOW_LIST.update(deps.storage, &contract, |old| {
-        if let Some(old) = old {
-            // we must ensure it increases the limit
-            match (old.gas_limit, set.gas_limit) {
-                (None, Some(_)) => return Err(ContractError::CannotLowerGas),
-                (Some(old), Some(new)) if new < old => return Err(ContractError::CannotLowerGas),
-                _ => {}
-            };
-        }
-        Ok(AllowInfo {
-            gas_limit: allow.gas_limit,
-        })
-    })?;
-
-    let gas = if let Some(gas) = allow.gas_limit {
-        gas.to_string()
-    } else {
-        "None".to_string()
-    };
+    ALLOW_LIST.save(deps.storage, &contract, &true)?;
 
     let res = Response::new()
         .add_attribute("action", "allow")
-        .add_attribute("contract", allow.contract)
-        .add_attribute("gas_limit", gas);
+        .add_attribute("contract", allow.contract);
     Ok(res)
 }
 
@@ -446,20 +432,9 @@ fn query_max_burn(deps: Deps, token: String) -> StdResult<u128> {
     }
 }
 
-fn query_allowed(deps: Deps, contract: String) -> StdResult<AllowedResponse> {
+fn query_allowed(deps: Deps, contract: String) -> StdResult<bool> {
     let addr = deps.api.addr_validate(&contract)?;
-    let info = ALLOW_LIST.may_load(deps.storage, &addr)?;
-    let res = match info {
-        None => AllowedResponse {
-            is_allowed: false,
-            gas_limit: None,
-        },
-        Some(a) => AllowedResponse {
-            is_allowed: true,
-            gas_limit: a.gas_limit,
-        },
-    };
-    Ok(res)
+    Ok(ALLOW_LIST.has(deps.storage, &addr))
 }
 
 fn query_record(deps: Deps, id_str: String, is_burn: bool) -> StdResult<bool> {
