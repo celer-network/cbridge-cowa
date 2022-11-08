@@ -131,12 +131,14 @@ impl<'a> Signers<'a> {
 
     /// we have to be consistent with how data is signed in sgn and verified in solidity
     /// contract_addr will be 12..32 of the hash of the addr
-    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, contract_addr: Addr, new_signers:&[String], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
+    pub fn update_signers(&self, deps: DepsMut, trigger_time: u64, block_time: u64, contract_addr: Addr, new_signers:&[String], new_powers: &[Uint128], sigs: &[Binary]) -> Result<Response, SignersError> {
         let signer_state = &mut self.0.load(deps.storage)?;
-        if signer_state.trigger_time >= trigger_time + 3600 {
+        if signer_state.trigger_time >= trigger_time {
             return Err(SignersError::Std(StdError::generic_err("Trigger time is not increasing")));
         }
-
+        if trigger_time >= block_time + 3600 {
+            return Err(SignersError::Std(StdError::generic_err("Trigger time is too large")));
+        }
         let domain = func::get_domain(deps.api.addr_canonicalize(contract_addr.as_str()).unwrap(), "UpdateSigners");
         let msg = abi::encode_packed(
                 &[
