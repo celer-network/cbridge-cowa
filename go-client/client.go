@@ -39,8 +39,8 @@ type CosConfig struct {
 	AccountPrefix        string
 	Endpoint             string
 	BridgeAddr           string
-	PegBridgeAddr        string
 	VaultBridgeAddr      string
+	PegBridgeAddr        string
 	MsgPackage           string
 	KeyringBackend       string
 	TransactorPassphrase string
