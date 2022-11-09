@@ -22,7 +22,7 @@ func main() {
 		GasAdjustment:        1.1,
 		GasPrices:            "0.01usei",
 		Timeout:              "15s",
-		HomeDir:              "/Users/liuxiao/code/cbridge-cowa/go-client/home_config/",
+		HomeDir:              "../home_config/",
 	}
 
 	cc := client.NewCosClient(cfg)
