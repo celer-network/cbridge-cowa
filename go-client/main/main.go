@@ -25,8 +25,8 @@ func main() {
 		HomeDir:              "/Users/liuxiao/code/cbridge-cowa/go-client/home_config/",
 	}
 
-	client := client.NewCosClient(cfg)
-	if client == nil {
+	cc := client.NewCosClient(cfg)
+	if cc == nil {
 		log.Fatalln("fail to init cos client")
 	}
 }
