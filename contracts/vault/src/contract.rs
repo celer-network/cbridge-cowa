@@ -209,13 +209,13 @@ pub fn do_withdraw(
 
     let mut res = Response::new()
         .add_attribute("action", "withdraw")
-        .add_attribute("wd_id", hex::encode(wd_id.clone()))
-        .add_attribute("receiver", hex::encode(withdraw.receiver))
-        .add_attribute("token", hex::encode(withdraw.token))
-        .add_attribute("amount", amount.to_string())
-        .add_attribute("ref_chain_id", withdraw.ref_chain_id.to_string())
-        .add_attribute("ref_id", hex::encode(withdraw.ref_id))
-        .add_attribute("burn_acct", hex::encode(withdraw.burn_account));
+        .add_attribute("w_wd_id", hex::encode(wd_id.clone()))
+        .add_attribute("w_receiver", hex::encode(withdraw.receiver))
+        .add_attribute("w_token", hex::encode(withdraw.token))
+        .add_attribute("w_amount", amount.to_string())
+        .add_attribute("w_ref_chain_id", withdraw.ref_chain_id.to_string())
+        .add_attribute("w_ref_id", hex::encode(withdraw.ref_id))
+        .add_attribute("w_burn_acct", hex::encode(withdraw.burn_account));
 
     VOLUME_CONTROL.update_volume(deps.storage, env.block.time.seconds(), &token, &Uint256::from(amount))?;
     let delay_threshold = DELAYED_TRANSFER.get_delay_threshold(deps.storage.deref(), &token)?;
@@ -384,12 +384,12 @@ pub fn do_deposit(
 
     let res = Response::new()
         .add_attribute("action", "deposit")
-        .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", depositor.to_string())
-        .add_attribute("token", token.to_string())
-        .add_attribute("amount", amount)
-        .add_attribute("dst_chid", msg.dst_chid.to_string())
-        .add_attribute("mint_acct", msg.mint_acnt);
+        .add_attribute("d_depid", hex::encode(dep_id))
+        .add_attribute("d_from", depositor.to_string())
+        .add_attribute("d_token", token.to_string())
+        .add_attribute("d_amount", amount)
+        .add_attribute("d_dst_chid", msg.dst_chid.to_string())
+        .add_attribute("d_mint_acct", msg.mint_acnt);
     Ok(res)
 }
 
@@ -451,12 +451,12 @@ pub fn do_deposit_native(
 
     let res = Response::new()
         .add_attribute("action", "deposit")
-        .add_attribute("depid", hex::encode(dep_id))
-        .add_attribute("from", user.to_string())
-        .add_attribute("token", token.to_string())
-        .add_attribute("amount", amount)
-        .add_attribute("dst_chid", dep_msg.dst_chid.to_string())
-        .add_attribute("mint_acct", dep_msg.mint_acnt);
+        .add_attribute("d_depid", hex::encode(dep_id))
+        .add_attribute("d_from", user.to_string())
+        .add_attribute("d_token", token.to_string())
+        .add_attribute("d_amount", amount)
+        .add_attribute("d_dst_chid", dep_msg.dst_chid.to_string())
+        .add_attribute("d_mint_acct", dep_msg.mint_acnt);
     Ok(res)
 }
 

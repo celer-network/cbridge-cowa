@@ -200,13 +200,13 @@ pub fn do_mint(
 
     let mut res = Response::new()
         .add_attribute("action", "mint")
-        .add_attribute("mint_id", hex::encode(mint_id.clone()))
-        .add_attribute("token", hex::encode(mint.token))
-        .add_attribute("account", hex::encode(mint.account))
-        .add_attribute("amount", amount.to_string())
-        .add_attribute("ref_chain_id", mint.ref_chain_id.to_string())
-        .add_attribute("ref_id", hex::encode(mint.ref_id))
-        .add_attribute("depositor", hex::encode(mint.depositor));
+        .add_attribute("m_mint_id", hex::encode(mint_id.clone()))
+        .add_attribute("m_token", hex::encode(mint.token))
+        .add_attribute("m_account", hex::encode(mint.account))
+        .add_attribute("m_amount", amount.to_string())
+        .add_attribute("m_ref_chain_id", mint.ref_chain_id.to_string())
+        .add_attribute("m_ref_id", hex::encode(mint.ref_id))
+        .add_attribute("m_depositor", hex::encode(mint.depositor));
 
     VOLUME_CONTROL.update_volume(deps.storage, env.block.time.seconds(), &token, &Uint256::from(amount))?;
     let delay_threshold = DELAYED_TRANSFER.get_delay_threshold(deps.storage.deref(), &token)?;
@@ -353,13 +353,13 @@ pub fn do_burn(
 
     let res = Response::new()
         .add_attribute("action", "burn")
-        .add_attribute("burnid", hex::encode(burn_id)) // calculated burnid
-        .add_attribute("token", token.to_string())
-        .add_attribute("amount", amount.to_string())
-        .add_attribute("burner", burner.to_string())
-        .add_attribute("to_chid", msg.to_chid.to_string())
-        .add_attribute("to_acnt", msg.to_acnt)
-        .add_attribute("nonce", msg.nonce.to_string());
+        .add_attribute("b_burnid", hex::encode(burn_id)) // calculated burnid
+        .add_attribute("b_token", token.to_string())
+        .add_attribute("b_amount", amount.to_string())
+        .add_attribute("b_burner", burner.to_string())
+        .add_attribute("b_to_chid", msg.to_chid.to_string())
+        .add_attribute("b_to_acnt", msg.to_acnt)
+        .add_attribute("b_nonce", msg.nonce.to_string());
     Ok(res)
 }
 
