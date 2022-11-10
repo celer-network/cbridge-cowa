@@ -78,7 +78,6 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AllowMsg {
     pub contract: String,
-    pub gas_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -133,7 +132,9 @@ pub enum QueryMsg {
     Allowed { contract: String },
     /// Return if a transfer id is recorded.
     /// Return type: bool
-    Record {id: String, is_burn: bool}
+    Record {id: String, is_burn: bool},
+    // Query the minted amount of the token
+    Supply {token: String},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -141,12 +142,6 @@ pub enum QueryMsg {
 pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct AllowedResponse {
-    pub is_allowed: bool,
-    pub gas_limit: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
