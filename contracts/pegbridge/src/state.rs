@@ -22,6 +22,7 @@ pub const MINT_IDS: Map<Vec<u8>, bool> = Map::new("mint_ids");
 pub const BURN_IDS: Map<Vec<u8>, bool> = Map::new("burn_ids");
 pub const MIN_BURN: Map<Addr, u128> = Map::new("min_deposit");
 pub const MAX_BURN: Map<Addr, u128> = Map::new("max_deposit");
+pub const SUPPLIES: Map<Addr, u128> = Map::new("total_supply");
 /// Every cw20 contract we allow to be burn is stored here
 pub const ALLOW_LIST: Map<&Addr, bool> = Map::new("allow_list");
 

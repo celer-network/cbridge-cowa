@@ -2,7 +2,7 @@
 use std::ops::Deref;
 use std::str::FromStr;
 use cosmwasm_std::{SubMsgResult, entry_point, Reply, ReplyOn, SubMsg};
-use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary};
+use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary, Storage};
 use cw2::set_contract_version;
 use utils::func::keccak256;
 use cw20::{Cw20CoinVerified, Cw20ExecuteMsg};
@@ -11,7 +11,7 @@ use token::msg::Cw20BurnMsg;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg};
 use crate::pegbridge;
-use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST};
+use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST, SUPPLIES};
 
 use utils::{abi, func};
 
@@ -237,9 +237,10 @@ pub fn do_mint(
         res = res.add_submessage(sub_msg)
     } else {
         // mint token
-        let mint_msg: CosmosMsg = _mint(token, receiver, amount)?;
+        let mint_msg: CosmosMsg = _mint(token.clone(), receiver, amount)?;
         res = res.add_message(mint_msg);
     }
+    increase_supply(deps.storage, token, amount)?;
     Ok(res)
 }
 
@@ -329,6 +330,7 @@ pub fn do_burn(
             return Err(ContractError::Std(StdError::generic_err("amount too large")));
         }
     }
+    decrease_supply(deps.storage, token.clone(), amount.u128())?;
 
     let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
     let burner = deps.api.addr_canonicalize(sender.as_str()).unwrap(); // sgnd uses canonical addr
@@ -401,6 +403,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::MaxBurn {token} => to_binary(&query_max_burn(deps, token)?),
         QueryMsg::Allowed { contract } => to_binary(&query_allowed(deps, contract)?),
         QueryMsg::Record {id, is_burn} => to_binary(&query_record(deps, id, is_burn)?),
+        QueryMsg::Supply {token} => to_binary(&query_supply(deps, token)?),
     }
 }
 
@@ -435,6 +438,41 @@ fn query_max_burn(deps: Deps, token: String) -> StdResult<u128> {
 fn query_allowed(deps: Deps, contract: String) -> StdResult<bool> {
     let addr = deps.api.addr_validate(&contract)?;
     Ok(ALLOW_LIST.has(deps.storage, &addr))
+}
+
+fn query_supply(deps: Deps, token: String) -> StdResult<u128> {
+    let token = deps.api.addr_validate(&token)?;
+    if let Ok(amount) = SUPPLIES.load(deps.storage, token) {
+        Ok(amount)
+    } else {
+        Ok(0)
+    }
+}
+
+fn increase_supply(store: &mut dyn Storage, token: Addr, delta: u128) -> StdResult<u128> {
+    let supply = SUPPLIES.may_load(store, token.clone())?;
+    let sup_amt;
+    if let Some(i) = supply {
+        sup_amt = i.checked_add(delta).unwrap();
+    } else {
+        sup_amt = delta;
+    }
+    SUPPLIES.save(store, token, &sup_amt)?;
+
+    return Ok(sup_amt)
+}
+
+fn decrease_supply(store: &mut dyn Storage, token: Addr, delta: u128) -> StdResult<u128> {
+    let supply = SUPPLIES.may_load(store, token.clone())?;
+    let sup_amt;
+    if let Some(i) = supply {
+        sup_amt = i.checked_sub(delta).unwrap();
+    } else {
+        sup_amt = delta;
+    }
+    SUPPLIES.save(store, token, &sup_amt)?;
+
+    return Ok(sup_amt)
 }
 
 fn query_record(deps: Deps, id_str: String, is_burn: bool) -> StdResult<bool> {

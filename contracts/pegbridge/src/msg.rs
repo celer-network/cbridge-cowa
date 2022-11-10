@@ -132,7 +132,9 @@ pub enum QueryMsg {
     Allowed { contract: String },
     /// Return if a transfer id is recorded.
     /// Return type: bool
-    Record {id: String, is_burn: bool}
+    Record {id: String, is_burn: bool},
+    // Query the minted amount of the token
+    Supply {token: String},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
