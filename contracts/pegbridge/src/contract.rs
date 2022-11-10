@@ -93,6 +93,7 @@ pub fn execute(
         ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, env, pbmsg, sigs),
         ExecuteMsg::UpdateMinBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, true),
         ExecuteMsg::UpdateMaxBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, false),
+        ExecuteMsg::SetSupply {token_addr, amount} => set_supply(deps, info, token_addr.as_str(), amount),
 
         // execute a delayed transfer
         ExecuteMsg::ExecuteDelayedTransfer {id} => do_execute_delayed_transfer(deps, env, id),
@@ -381,6 +382,21 @@ pub fn update_burn_amt_setting(
 
     Ok(Response::new()
         .add_attribute("action", "update_".to_owned() + if is_min { "min" } else { "max" } + "_burn")
+        .add_attribute("token", token_addr)
+        .add_attribute("amount", amount.to_string()))
+}
+
+fn set_supply(
+    deps: DepsMut,
+    info: MessageInfo,
+    token_addr: &str,
+    amount: u128,
+) -> Result<Response, ContractError> {
+    OWNER.assert_owner(deps.as_ref(), &info)?;
+    let valid_addr = deps.api.addr_validate(token_addr)?;
+    SUPPLIES.save(deps.storage, valid_addr, &amount)?;
+    Ok(Response::new()
+        .add_attribute("action", "set_supply")
         .add_attribute("token", token_addr)
         .add_attribute("amount", amount.to_string()))
 }
