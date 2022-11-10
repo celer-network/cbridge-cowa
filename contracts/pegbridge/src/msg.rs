@@ -67,6 +67,7 @@ pub enum ExecuteMsg {
     Burn ( Cw20BurnMsg ),
     UpdateMinBurn{ token_addr: String, amount: u128 },
     UpdateMaxBurn{ token_addr: String, amount: u128 },
+    SetSupply{ token_addr: String, amount: u128 },
 
     ExecuteDelayedTransfer{id: String},
     EmitEvent{
