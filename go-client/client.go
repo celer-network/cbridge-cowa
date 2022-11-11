@@ -142,12 +142,12 @@ func (c *CosClient) MonOTV(depositCallback, withdrawCallback, dtExectutedCallbac
 		func(events map[string][]string) {
 			// todo: not sure if those three events would be strictly seperated by this monitor service, so parallel processing them at present.
 			// event: deposited
-			if has(events["wasm.action"], "deposit") && events["wasm.dst_chid"] != nil {
+			if has(events["wasm.action"], "deposit") && events["wasm.d_dst_chid"] != nil {
 				log.Infof("Mon commos chain deposited:%+v, chainid: %s", events, c.RawChainID)
 				depositCallback(events, c.ChainID)
 			}
 			// event: withdrawn
-			if has(events["wasm.action"], "withdraw") && events["wasm.ref_chain_id"] != nil {
+			if has(events["wasm.action"], "withdraw") && events["wasm.w_ref_chain_id"] != nil {
 				log.Infof("Mon commos chain withdrawn:%+v, chainid: %s", events, c.RawChainID)
 				withdrawCallback(events, c.ChainID)
 			}
@@ -172,12 +172,12 @@ func (c *CosClient) MonPTB(burnCallback, mintCallback, dtExecutedCallback func(e
 		func(events map[string][]string) {
 			// todo: not sure if those three events would be strictly seperated by this monitor service, so parallel processing them at present.
 			// event: burn
-			if has(events["wasm.action"], "burn") && events["wasm.to_chid"] != nil {
+			if has(events["wasm.action"], "burn") && events["wasm.b_to_chid"] != nil {
 				log.Infof("Mon commos chain burn:%+v, chainid: %s", events, c.RawChainID)
 				burnCallback(events, c.ChainID)
 			}
 			// event: mint
-			if has(events["wasm.action"], "mint") && events["wasm.ref_chain_id"] != nil {
+			if has(events["wasm.action"], "mint") && events["wasm.m_ref_chain_id"] != nil {
 				log.Infof("Mon commos chain mint:%+v, chainid: %s", events, c.RawChainID)
 				mintCallback(events, c.ChainID)
 			}
@@ -224,7 +224,7 @@ func (c *CosClient) GetBlockTs() (time.Time, error) {
 	}
 }
 
-func (c *CosClient) isVaultPaused() (bool, error) {
+func (c *CosClient) IsVaultPaused() (bool, error) {
 	return c.IsPaused(c.VaultAddr)
 }
 
