@@ -15,6 +15,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	tmclient "github.com/cosmos/ibc-go/v2/modules/light-clients/07-tendermint/types"
 	ec "github.com/ethereum/go-ethereum/common"
+	"github.com/gogo/protobuf/proto"
 	lens "github.com/strangelove-ventures/lens/client"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
 )
@@ -48,6 +49,10 @@ type CosConfig struct {
 	GasPrices            string
 	Timeout              string
 	HomeDir              string
+}
+
+type customTypeUrlRegister interface {
+	RegisterCustomTypeURL(interface{}, string, proto.Message)
 }
 
 func NewCosClient(cfg *CosConfig) *CosClient {
@@ -90,6 +95,11 @@ func NewCosClient(cfg *CosConfig) *CosClient {
 	if err != nil {
 		log.Fatalf("init chain client err: %s", err.Error())
 	}
+	customTypeUrlRegister, ok := cc.Codec.InterfaceRegistry.(customTypeUrlRegister)
+	if !ok {
+		log.Fatalln("not a customTypeUrlRegister")
+	}
+	customTypeUrlRegister.RegisterCustomTypeURL((*cosmostypes.Msg)(nil), "/"+cfg.MsgPackage+".MsgExecuteContract", &types.MsgExecuteContract{})
 	err = cc.RPCClient.Start()
 	if err != nil {
 		log.Fatalf("start rpc client err: %s", err.Error())

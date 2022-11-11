@@ -19,7 +19,7 @@ func main() {
 		MsgPackage:           "cosmwasm.wasm.v1",
 		KeyringBackend:       "file",
 		TransactorPassphrase: "12341234",
-		GasAdjustment:        1.1,
+		GasAdjustment:        1.3,
 		GasPrices:            "0.01usei",
 		Timeout:              "15s",
 		HomeDir:              "../home_config/",
@@ -36,9 +36,17 @@ func main() {
 	}
 	log.Infof("pause status: %v", paused)
 
-	txHash, err := cc.Pause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	if !paused {
+		txHash, err := cc.Pause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		log.Infof("pause txHash: %x", txHash)
+	}
+
+	txHash, err := cc.Unpause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Infof("pause txHash: %x", txHash)
+	log.Infof("unpause txHash: %x", txHash)
 }
