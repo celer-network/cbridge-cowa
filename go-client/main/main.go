@@ -44,9 +44,21 @@ func main() {
 		log.Infof("pause txHash: %x", txHash)
 	}
 
+	paused, err = cc.IsPaused("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("pause status: %v", paused)
+
 	txHash, err := cc.Unpause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Infof("unpause txHash: %x", txHash)
+
+	paused, err = cc.IsPaused("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("pause status: %v", paused)
 }
