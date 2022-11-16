@@ -13,7 +13,6 @@ import (
 	"github.com/celer-network/goutils/log"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	tmclient "github.com/cosmos/ibc-go/v2/modules/light-clients/07-tendermint/types"
 	ec "github.com/ethereum/go-ethereum/common"
 	"github.com/gogo/protobuf/proto"
 	lens "github.com/strangelove-ventures/lens/client"
@@ -221,17 +220,11 @@ func (c *CosClient) GetBlockTs() (time.Time, error) {
 	if err != nil {
 		return time.Now(), err
 	}
-	header, err := c.Cc.QueryHeaderAtHeight(height)
+	res, err := c.Cc.RPCClient.Commit(context.Background(), &height)
 	if err != nil {
 		return time.Now(), err
 	}
-
-	h, ok := header.(*tmclient.Header)
-	if ok {
-		return h.Header.Time, nil
-	} else {
-		return time.Now(), fmt.Errorf("fail to get terra cur blk ts")
-	}
+	return res.Time, nil
 }
 
 func (c *CosClient) IsVaultPaused() (bool, error) {
