@@ -138,6 +138,7 @@ pub enum QueryMsg {
 pub struct GetConfigResp {
     pub owner: Addr,
     pub sig_checker: Addr,
+    pub native_tokens: Vec<NativeToken>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
