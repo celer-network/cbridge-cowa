@@ -13,6 +13,7 @@ import (
 	"github.com/celer-network/goutils/log"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	ec "github.com/ethereum/go-ethereum/common"
 	"github.com/gogo/protobuf/proto"
 	lens "github.com/strangelove-ventures/lens/client"
@@ -102,6 +103,9 @@ func NewCosClient(cfg *CosConfig) *CosClient {
 	err = cc.RPCClient.Start()
 	if err != nil {
 		log.Fatalf("start rpc client err: %s", err.Error())
+	}
+	if cfg.ChainId == 999999997 {
+		customTypeUrlRegister.RegisterCustomTypeURL((*authtypes.AccountI)(nil), "/injective.types.v1beta1.EthAccount", &types.EthAccount{})
 	}
 	ret.Cc = cc
 	return ret
@@ -265,19 +269,19 @@ func (c *CosClient) PausePegBridge() (string, error) {
 }
 
 func (c *CosClient) Pause(contractCanonicalAddr string) (string, error) {
-	contractHumanAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
+	constractAddr, err := cosmostypes.AccAddressFromHex(contractCanonicalAddr)
 	if err != nil {
 		log.Errorf("err:%v", err)
 		return "", err
 	}
-	senderAddr, err := c.Cc.Address()
+	senderAddr, err := c.Cc.GetKeyAddress()
 	if err != nil {
 		log.Errorf("err:%v", err)
 		return "", err
 	}
 	msg := &types.MsgExecuteContract{
-		Sender:       senderAddr,
-		Contract:     contractHumanAddr,
+		Sender:       c.Cc.MustEncodeAccAddr(senderAddr),
+		Contract:     c.Cc.MustEncodeAccAddr(constractAddr),
 		ExecuteMsg:   []byte(`{"pause":{}}`),
 		Coins:        nil,
 		SenderPrefix: c.Cc.Config.AccountPrefix,

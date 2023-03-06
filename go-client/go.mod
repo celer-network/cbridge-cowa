@@ -3,10 +3,13 @@ module github.com/celer-network/cbridge-cowa/go-client
 go 1.18
 
 replace (
+	github.com/99designs/keyring => github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76
 	github.com/btcsuite/btcd => github.com/btcsuite/btcd v0.22.1 // to fix ambiguous import
-	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
-	github.com/strangelove-ventures/lens => github.com/celer-network/lens v0.0.0-20221116065654-08bebf7d6d37
+	github.com/strangelove-ventures/lens => github.com/celer-network/lens v0.0.0-20230120071358-7d6dbf65fa4b
+	github.com/tendermint/tendermint => github.com/celer-network/tendermint v0.0.0-20230120070354-4d1d2430b79e
 )
+
+replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 require (
 	github.com/celer-network/goutils v0.1.56
@@ -74,7 +77,6 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20181016162300-f8f6d4d2b643 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect

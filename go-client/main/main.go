@@ -8,19 +8,19 @@ import (
 func main() {
 	log.Infof("test cowa client")
 	cfg := &client.CosConfig{
-		ChainId:              999999998,
-		RawChainID:           "sei-devnet-1",
+		ChainId:              999999997,
+		RawChainID:           "injective-888",
 		Key:                  "demoacc",
-		AccountPrefix:        "sei",
-		Endpoint:             "http://34.223.104.208:26654",
-		BridgeAddr:           "0x9e28beafa966b2407bffb0d48651e94972a56e69f3c0897d9e8facbdaeb98386",
-		VaultBridgeAddr:      "0x78167721f3f0bd57c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2",
-		PegBridgeAddr:        "0x6239c3644abd336fad322a24dd2930a5aa3fa844a5d239e3b02584e79c791053",
+		AccountPrefix:        "inj",
+		Endpoint:             "https://testnet.tm.injective.network:443",
+		BridgeAddr:           "fdaaf34776d29faf81ffa96c941f2ae934d0db51",
+		VaultBridgeAddr:      "3208622742955b341c5b183e199630c7d0038f4e",
+		PegBridgeAddr:        "4bbe3676dc736742f7e617c7ab197bed603218d0",
 		MsgPackage:           "cosmwasm.wasm.v1",
 		KeyringBackend:       "file",
 		TransactorPassphrase: "12341234",
-		GasAdjustment:        1.3,
-		GasPrices:            "0.01usei",
+		GasAdjustment:        1.5,
+		GasPrices:            "50000000000inj",
 		Timeout:              "15s",
 		HomeDir:              "../home_config/",
 	}
@@ -30,27 +30,27 @@ func main() {
 		log.Fatalln("fail to init cos client")
 	}
 
-	paused, err := cc.IsPaused("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	paused, err := cc.IsPaused(cfg.VaultBridgeAddr)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Infof("pause status: %v", paused)
 
 	if !paused {
-		txHash, err := cc.Pause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+		txHash, err := cc.Pause(cfg.VaultBridgeAddr)
 		if err != nil {
 			log.Fatalln(err)
 		}
 		log.Infof("pause txHash: %x", txHash)
 	}
 
-	paused, err = cc.IsPaused("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	paused, err = cc.IsPaused(cfg.VaultBridgeAddr)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	log.Infof("pause status: %v", paused)
 
-	txHash, err := cc.Unpause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
+	/*txHash, err := cc.Unpause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -60,5 +60,5 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Infof("pause status: %v", paused)
+	log.Infof("pause status: %v", paused)*/
 }
