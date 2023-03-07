@@ -8,7 +8,7 @@ pub enum SolType<'a> {
     Bytes(&'a [u8]),
     // fixed solidity length, but not in other language
     Bytes32(&'a [u8; 32]), // len should be 32
-    Addr(&'a [u8; 20]), // len should be 20, use addr to avoid confusion w/ cosmwasm Address
+    Addr(&'a [u8; 20]),    // len should be 20, use addr to avoid confusion w/ cosmwasm Address
     Uint256(&'a [u8; 32]), // will left pad to 32 bytes, [u8] is big.Int.Bytes()
     // array type, we have to treat it differently due to encode packed pad array element
     AddrList(&'a Vec<[u8; 20]>),
@@ -17,7 +17,7 @@ pub enum SolType<'a> {
 
 pub type Word = [u8; 32];
 
-pub const CHAIN_ID: u64 = 999999999;
+pub const CHAIN_ID: u64 = 999999997;
 
 pub fn encode_packed(items: &[SolType]) -> Vec<u8> {
     let raw = items.iter().fold(Vec::new(), |mut acc, i| {
@@ -51,7 +51,7 @@ pub fn pack<'a>(data: &'a SolType) -> Vec<u8> {
             let encoded = a.iter().fold(Vec::new(), |mut acc, i| {
                 let padded = pad_addr(i).to_vec();
                 acc.push(padded);
-                acc            
+                acc
             });
             let encoded = encoded.join(&[][..]);
             raw.extend(encoded);
@@ -71,7 +71,7 @@ fn pad_addr(addr: &[u8; 20]) -> Word {
     padded
 }
 
-pub fn pad_to_16_bytes(ori: &[u8]) -> [u8;16] {
+pub fn pad_to_16_bytes(ori: &[u8]) -> [u8; 16] {
     if ori.len() > 16 {
         panic!("unreachable: len bigger than 16")
     }
@@ -81,7 +81,7 @@ pub fn pad_to_16_bytes(ori: &[u8]) -> [u8;16] {
     padded
 }
 
-pub fn pad_to_32_bytes(ori: &[u8]) -> [u8;32] {
+pub fn pad_to_32_bytes(ori: &[u8]) -> [u8; 32] {
     if ori.len() > 32 {
         panic!("unreachable: len bigger than 32")
     }
@@ -93,17 +93,18 @@ pub fn pad_to_32_bytes(ori: &[u8]) -> [u8;32] {
 
 #[cfg(test)]
 mod tests {
-    use hex_literal::hex;
     use super::*;
+    use hex_literal::hex;
 
     #[test]
-	fn encode_addr_list() {
-		let addresses = vec![hex!("1111111111111111111111111111111111111111"), hex!("1111111111111111111111111111111111111112")];
+    fn encode_addr_list() {
+        let addresses = vec![
+            hex!("1111111111111111111111111111111111111111"),
+            hex!("1111111111111111111111111111111111111112"),
+        ];
         let addr_list = SolType::AddrList(&addresses);
-		let encoded = encode_packed(&[addr_list]);
-		let expected = hex!("00000000000000000000000011111111111111111111111111111111111111110000000000000000000000001111111111111111111111111111111111111112").to_vec();
-		assert_eq!(encoded, expected);
-	}
+        let encoded = encode_packed(&[addr_list]);
+        let expected = hex!("00000000000000000000000011111111111111111111111111111111111111110000000000000000000000001111111111111111111111111111111111111112").to_vec();
+        assert_eq!(encoded, expected);
+    }
 }
-
-

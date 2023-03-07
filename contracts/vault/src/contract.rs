@@ -486,6 +486,7 @@ fn get_config(deps: Deps) -> StdResult<GetConfigResp> {
     let resp = GetConfigResp {
         owner: Addr::unchecked(owner),
         sig_checker: state.sig_checker, 
+        native_tokens: state.native_tokens,
     };
     Ok(resp)
 }
