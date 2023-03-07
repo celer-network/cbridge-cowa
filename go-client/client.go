@@ -60,8 +60,8 @@ func NewCosClient(cfg *CosConfig) *CosClient {
 		ChainID:       cfg.ChainId,
 		RawChainID:    cfg.RawChainID,
 		BridgeAddr:    cfg.BridgeAddr,
-		VaultAddr:     cfg.PegBridgeAddr,
-		PegBridgeAddr: cfg.VaultBridgeAddr,
+		VaultAddr:     cfg.VaultBridgeAddr,
+		PegBridgeAddr: cfg.PegBridgeAddr,
 		MsgPackage:    cfg.MsgPackage,
 	}
 
@@ -337,13 +337,13 @@ func (c *CosClient) QueryVaultRecordExist(id ec.Hash, isDeposit bool) (bool, err
 	}
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
-		QueryData: []byte(fmt.Sprintf("{\"record\":{\"id\":\"%x\", \"is_deposit\":\"%t\"}}", id, isDeposit)),
+		QueryData: []byte(fmt.Sprintf("{\"record\":{\"id\":\"%x\", \"is_deposit\":%t}}", id, isDeposit)),
 	}
-	_, err = types.SmartContractState(c.Cc, c.MsgPackage, request)
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
 		return false, err
 	}
-	return true, nil
+	return fmt.Sprintf("%s", resp.Data) == "true", nil
 }
 
 func (c *CosClient) QueryPegBridgeRecordExist(id ec.Hash, isBurn bool) (bool, error) {
@@ -353,31 +353,35 @@ func (c *CosClient) QueryPegBridgeRecordExist(id ec.Hash, isBurn bool) (bool, er
 	}
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
-		QueryData: []byte(fmt.Sprintf("{\"record\":{\"id\":\"%x\", \"is_burn\":\"%t\"}}", id, isBurn)),
+		QueryData: []byte(fmt.Sprintf("{\"record\":{\"id\":\"%x\", \"is_burn\":%t}}", id, isBurn)),
 	}
-	_, err = types.SmartContractState(c.Cc, c.MsgPackage, request)
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
 		return false, err
 	}
-	return true, nil
+	return fmt.Sprintf("%s", resp.Data) == "true", nil
 }
 
-func (c *CosClient) QueryVaultTokenVolume(token string) (*big.Int, error) {
-	return c.QueryTokenVolume(token, c.VaultAddr)
+func (c *CosClient) QueryVaultTokenVolume(tokenCanonicalAddr string) (*big.Int, error) {
+	return c.QueryTokenVolume(tokenCanonicalAddr, c.VaultAddr)
 }
 
-func (c *CosClient) QueryPegBridgeTokenVolume(token string) (*big.Int, error) {
-	return c.QueryTokenVolume(token, c.PegBridgeAddr)
+func (c *CosClient) QueryPegBridgeTokenVolume(tokenCanonicalAddr string) (*big.Int, error) {
+	return c.QueryTokenVolume(tokenCanonicalAddr, c.PegBridgeAddr)
 }
 
-func (c *CosClient) QueryTokenVolume(token string, contractCanonicalAddr string) (*big.Int, error) {
+func (c *CosClient) QueryTokenVolume(tokenCanonicalAddr string, contractCanonicalAddr string) (*big.Int, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	tokenAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
 	if err != nil {
 		return nil, err
 	}
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
-		QueryData: []byte(fmt.Sprintf("{\"epoch_volume\":{\"token\":\"%s\"}}", token)),
+		QueryData: []byte(fmt.Sprintf("{\"epoch_volume\":{\"token\":\"%s\"}}", tokenAddr)),
 	}
 	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
@@ -451,22 +455,22 @@ func (c *CosClient) QueryVolumeLastOpTimestamp(token string, contractCanonicalAd
 	return lastOpTimestamp, nil
 }
 
-func (c *CosClient) QueryVaultVolumeEpochLength(token string) (uint64, error) {
-	return c.QueryVolumeEpochLength(token, c.VaultAddr)
+func (c *CosClient) QueryVaultVolumeEpochLength() (uint64, error) {
+	return c.QueryVolumeEpochLength(c.VaultAddr)
 }
 
-func (c *CosClient) QueryPegBridgeVolumeEpochLength(token string) (uint64, error) {
-	return c.QueryVolumeEpochLength(token, c.PegBridgeAddr)
+func (c *CosClient) QueryPegBridgeVolumeEpochLength() (uint64, error) {
+	return c.QueryVolumeEpochLength(c.PegBridgeAddr)
 }
 
-func (c *CosClient) QueryVolumeEpochLength(token string, contractCanonicalAddr string) (uint64, error) {
+func (c *CosClient) QueryVolumeEpochLength(contractCanonicalAddr string) (uint64, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
 	if err != nil {
 		return 0, err
 	}
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
-		QueryData: []byte(fmt.Sprintf("{\"epoch_length\":{\"token\":\"%s\"}}", token)),
+		QueryData: []byte("{\"epoch_length\":{}}"),
 	}
 	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
@@ -480,8 +484,63 @@ func (c *CosClient) QueryVolumeEpochLength(token string, contractCanonicalAddr s
 	return epochLength, nil
 }
 
-func (c *CosClient) QueryTokenSupply(token string) (*big.Int, error) {
-	return nil, nil
+type PegTokenInfo struct {
+	Name        string
+	Symbol      string
+	Decimals    uint64
+	TotalSupply string `json:"total_supply"`
+}
+
+func (c *CosClient) QueryTokenTotalSupply(tokenCanonicalAddr string) (*PegTokenInfo, error) {
+	contractAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	request := &types.QuerySmartContractStateRequest{
+		Address:   contractAddr,
+		QueryData: []byte("{\"token_info\":{}}"),
+	}
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
+	if err != nil {
+		return nil, err
+	}
+	var info PegTokenInfo
+	err = json.Unmarshal(resp.Data, &info)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+func (c *CosClient) QueryPegTokenSupply(tokenCanonicalAddr string) (*big.Int, error) {
+	contractAddr, err := c.GetContractHumanAddress(c.PegBridgeAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &types.QuerySmartContractStateRequest{
+		Address:   contractAddr,
+		QueryData: []byte(fmt.Sprintf("{\"supply\":{\"token\":\"%s\"}}", tokenAddr)),
+	}
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
+	if err != nil {
+		return nil, err
+	}
+	var supply string
+	err = json.Unmarshal(resp.Data, &supply)
+	if err != nil {
+		return nil, err
+	}
+	res, succ := new(big.Int).SetString(supply, 10)
+	if !succ {
+		return nil, fmt.Errorf("invalid supply %s %s", tokenCanonicalAddr, supply)
+	}
+	return res, nil
 }
 
 func (c *CosClient) QueryTxGasCost(txHash ec.Hash) (*big.Int, error) {
@@ -511,38 +570,77 @@ func (c *CosClient) DelayTransferExist(id ec.Hash, contractCanonicalAddr string)
 	}
 	_, err = types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
+		if strings.Contains(err.Error(), "utils::delayed_transfer::DelayedXfer not found") {
+			return false, nil
+		}
 		return false, err
 	}
 	return true, nil
 }
 
-func (c *CosClient) GetVaultDelayThreshold() (int64, error) {
-	return c.GetDelayThreshold(c.VaultAddr)
+func (c *CosClient) GetVaultDelayPeriod() (uint64, error) {
+	return c.GetDelayPeriod(c.VaultAddr)
 }
 
-func (c *CosClient) GetPegBridgeDelayThreshold() (int64, error) {
-	return c.GetDelayThreshold(c.PegBridgeAddr)
+func (c *CosClient) GetPegBridgeDelayPeriod() (uint64, error) {
+	return c.GetDelayPeriod(c.PegBridgeAddr)
 }
 
-func (c *CosClient) GetDelayThreshold(contractCanonicalAddr string) (int64, error) {
+func (c *CosClient) GetDelayPeriod(contractCanonicalAddr string) (uint64, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
 	if err != nil {
 		return 0, err
 	}
+
 	request := &types.QuerySmartContractStateRequest{
 		Address:   contractAddr,
-		QueryData: []byte("{\"delay_period\":{}}"),
+		QueryData: []byte(fmt.Sprintf("{\"delay_period\":{}}")),
 	}
 	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
 	if err != nil {
 		return 0, err
 	}
-	var period int64
-	err = json.Unmarshal(resp.Data, &period)
+	var delayPeriod uint64
+	err = json.Unmarshal(resp.Data, &delayPeriod)
 	if err != nil {
 		return 0, err
 	}
-	return period, nil
+	return delayPeriod, nil
+}
+
+func (c *CosClient) GetVaultDelayThreshold(tokenCanonicalAddr string) (string, error) {
+	return c.GetDelayThreshold(c.VaultAddr, tokenCanonicalAddr)
+}
+
+func (c *CosClient) GetPegBridgeDelayThreshold(tokenCanonicalAddr string) (string, error) {
+	return c.GetDelayThreshold(c.PegBridgeAddr, tokenCanonicalAddr)
+}
+
+func (c *CosClient) GetDelayThreshold(contractCanonicalAddr, tokenCanonicalAddr string) (string, error) {
+	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
+	if err != nil {
+		return "", err
+	}
+
+	tokenAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
+	if err != nil {
+		return "", err
+	}
+
+	request := &types.QuerySmartContractStateRequest{
+		Address:   contractAddr,
+		QueryData: []byte(fmt.Sprintf("{\"delay_threshold\":{\"token\":\"%s\"}}", tokenAddr)),
+	}
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
+	if err != nil {
+		return "", err
+	}
+	var delayThreshold string
+	err = json.Unmarshal(resp.Data, &delayThreshold)
+	if err != nil {
+		return "", err
+	}
+	return delayThreshold, nil
 }
 
 func (c *CosClient) ExecuteVaultDelay(id ec.Hash) (string, error) {
