@@ -484,6 +484,88 @@ func (c *CosClient) QueryVolumeEpochLength(contractCanonicalAddr string) (uint64
 	return epochLength, nil
 }
 
+func (c *CosClient) QueryNativeToken(balancerCanonicalAddr string) (*cosmostypes.Coin, error) {
+	balancerAddr, err := c.GetContractHumanAddress(balancerCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.Cc.QueryBalanceWithAddress(balancerAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	var inj *cosmostypes.Coin
+
+	for _, v := range res {
+		if v.Denom == "inj" {
+			inj = &v
+			break
+		}
+	}
+
+	if inj == nil {
+		return nil, fmt.Errorf("fail to get native token")
+	}
+
+	return inj, nil
+}
+
+type BalanceResp struct {
+	Balance string
+}
+
+func (c *CosClient) QueryCW20Balance(tokenCanonicalAddr, balancerCanonicalAddr string) (*BalanceResp, error) {
+	contractAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	balancerAddr, err := c.GetContractHumanAddress(balancerCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	request := &types.QuerySmartContractStateRequest{
+		Address:   contractAddr,
+		QueryData: []byte(fmt.Sprintf("{\"balance\":{\"address\": \"%s\"}}", balancerAddr)),
+	}
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var res BalanceResp
+	err = json.Unmarshal(resp.Data, &res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *CosClient) QueryPegTokenBalance(tokenCanonicalAddr, balancerCanonicalAddr string) (*BalanceResp, error) {
+	contractAddr, err := c.GetContractHumanAddress(tokenCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	balancerAddr, err := c.GetContractHumanAddress(balancerCanonicalAddr)
+	if err != nil {
+		return nil, err
+	}
+	request := &types.QuerySmartContractStateRequest{
+		Address:   contractAddr,
+		QueryData: []byte(fmt.Sprintf("{\"balance\":{\"address\": \"%s\"}}", balancerAddr)),
+	}
+	resp, err := types.SmartContractState(c.Cc, c.MsgPackage, request)
+	if err != nil {
+		return nil, err
+	}
+
+	var res BalanceResp
+	err = json.Unmarshal(resp.Data, &res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 type PegTokenInfo struct {
 	Name        string
 	Symbol      string

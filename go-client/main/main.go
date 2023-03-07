@@ -41,7 +41,33 @@ func main() {
 	//testQueryDelay(cc)
 	//testExecuteDelay(cc)
 	//testQueryVolCap(cc)
-	testQuerySupply(cc)
+	//testQuerySupply(cc)
+	//testQueryCW20(cc)
+	//testQueryPegTokenBalance(cc)
+	testQueryNativeToken(cc)
+}
+
+func testQueryNativeToken(cc *client.CosClient) {
+	coin, err := cc.QueryNativeToken("17467394ef21ce1180F989Df2BB3f1b3f984433D")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("inj balance: %s", coin.Amount.String())
+}
+
+func testQueryPegTokenBalance(cc *client.CosClient) {
+	bal, err := cc.QueryCW20Balance("588Fb670809Da351372569f64604683bCD39d9f2", "17467394ef21ce1180F989Df2BB3f1b3f984433D")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("bal: %+v", bal)
+}
+
+func testQueryCW20(cc *client.CosClient) {
+	_, err := cc.QueryCW20Balance("588Fb670809Da351372569f64604683bCD39d9f2", "17467394ef21ce1180F989Df2BB3f1b3f984433D")
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
 func testQuerySupply(cc *client.CosClient) {
