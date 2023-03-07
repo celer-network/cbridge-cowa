@@ -241,8 +241,6 @@ func (c *CosClient) IsPegBridgePaused() (bool, error) {
 
 func (c *CosClient) IsPaused(contractCanonicalAddr string) (bool, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
-	log.Infof("contractCanonicalAddr: %s", contractCanonicalAddr)
-	log.Infof("contractAddr: %s", contractAddr)
 	if err != nil {
 		return false, err
 	}
