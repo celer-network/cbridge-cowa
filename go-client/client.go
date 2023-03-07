@@ -241,6 +241,8 @@ func (c *CosClient) IsPegBridgePaused() (bool, error) {
 
 func (c *CosClient) IsPaused(contractCanonicalAddr string) (bool, error) {
 	contractAddr, err := c.GetContractHumanAddress(contractCanonicalAddr)
+	log.Infof("contractCanonicalAddr: %s", contractCanonicalAddr)
+	log.Infof("contractAddr: %s", contractAddr)
 	if err != nil {
 		return false, err
 	}
@@ -578,7 +580,7 @@ func (c *CosClient) ExecuteDelay(id ec.Hash, contractCanonicalAddr string) (stri
 }
 
 func (c *CosClient) GetContractHumanAddress(contractCanonicalAddr string) (string, error) {
-	addr, err := cosmostypes.AccAddressFromHex(c.VaultAddr)
+	addr, err := cosmostypes.AccAddressFromHex(contractCanonicalAddr)
 	if err != nil {
 		return "", err
 	}

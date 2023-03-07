@@ -30,25 +30,7 @@ func main() {
 		log.Fatalln("fail to init cos client")
 	}
 
-	paused, err := cc.IsPaused(cfg.VaultBridgeAddr)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Infof("pause status: %v", paused)
-
-	if !paused {
-		txHash, err := cc.Pause(cfg.VaultBridgeAddr)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		log.Infof("pause txHash: %x", txHash)
-	}
-
-	paused, err = cc.IsPaused(cfg.VaultBridgeAddr)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Infof("pause status: %v", paused)
+	testPauseFlow(cc)
 
 	/*txHash, err := cc.Unpause("0x78167721f3f0bd7c20c4c783db10b95cc1207d5b980c02fc252b4825b9c87b2")
 	if err != nil {
@@ -61,4 +43,34 @@ func main() {
 		log.Fatalln(err)
 	}
 	log.Infof("pause status: %v", paused)*/
+}
+
+func testPauseFlow(cc *client.CosClient) {
+	paused, err := cc.IsPaused(cc.VaultAddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("pause status: %v", paused)
+
+	if !paused {
+		txHash, err := cc.Pause(cc.VaultAddr)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		log.Infof("pause txHash: %s", txHash)
+	}
+
+	paused, err = cc.IsPaused(cc.VaultAddr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infof("pause status: %v", paused)
+
+	if paused {
+		txHash, err := cc.Unpause(cc.VaultAddr)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		log.Infof("unpause txHash: %s", txHash)
+	}
 }
