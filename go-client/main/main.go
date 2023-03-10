@@ -23,7 +23,7 @@ func main() {
 		GasAdjustment:        1.5,
 		GasPrices:            "50000000000inj",
 		Timeout:              "15s",
-		HomeDir:              "../home_config/",
+		HomeDir:              "/Users/liuxiao/code/sgn-v2-ops/node-configs/sgn-testnet-4000/sentinel/",
 	}
 
 	cc := client.NewCosClient(cfg)
@@ -37,14 +37,14 @@ func main() {
 	}
 	log.Infof("cur blk ts:%s", blkTs.String())
 
-	//testPauseFlow(cc)
+	testPauseFlow(cc)
 	//testQueryDelay(cc)
 	//testExecuteDelay(cc)
 	//testQueryVolCap(cc)
 	//testQuerySupply(cc)
 	//testQueryCW20(cc)
 	//testQueryPegTokenBalance(cc)
-	testQueryNativeToken(cc)
+	//testQueryNativeToken(cc)
 }
 
 func testQueryNativeToken(cc *client.CosClient) {
@@ -53,6 +53,7 @@ func testQueryNativeToken(cc *client.CosClient) {
 		log.Fatalln(err)
 	}
 	log.Infof("inj balance: %s", coin.Amount.String())
+
 }
 
 func testQueryPegTokenBalance(cc *client.CosClient) {

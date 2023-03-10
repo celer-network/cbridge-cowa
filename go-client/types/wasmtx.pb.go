@@ -320,12 +320,12 @@ func (m *MsgExecuteContractResponse) GetData() []byte {
 }
 
 func init() {
-	proto.RegisterType((*MsgStoreCode)(nil), "sgn.wasm.v1beta1.MsgStoreCode")
-	proto.RegisterType((*MsgStoreCodeResponse)(nil), "sgn.wasm.v1beta1.MsgStoreCodeResponse")
-	proto.RegisterType((*MsgInstantiateContract)(nil), "sgn.wasm.v1beta1.MsgInstantiateContract")
-	proto.RegisterType((*MsgInstantiateContractResponse)(nil), "sgn.wasm.v1beta1.MsgInstantiateContractResponse")
-	proto.RegisterType((*MsgExecuteContract)(nil), "sgn.wasm.v1beta1.MsgExecuteContract")
-	proto.RegisterType((*MsgExecuteContractResponse)(nil), "sgn.wasm.v1beta1.MsgExecuteContractResponse")
+	proto.RegisterType((*MsgStoreCode)(nil), "sdk.wasm.v1beta1.MsgStoreCode")
+	proto.RegisterType((*MsgStoreCodeResponse)(nil), "sdk.wasm.v1beta1.MsgStoreCodeResponse")
+	proto.RegisterType((*MsgInstantiateContract)(nil), "sdk.wasm.v1beta1.MsgInstantiateContract")
+	proto.RegisterType((*MsgInstantiateContractResponse)(nil), "sdk.wasm.v1beta1.MsgInstantiateContractResponse")
+	proto.RegisterType((*MsgExecuteContract)(nil), "sdk.wasm.v1beta1.MsgExecuteContract")
+	proto.RegisterType((*MsgExecuteContractResponse)(nil), "sdk.wasm.v1beta1.MsgExecuteContractResponse")
 }
 
 func init() { proto.RegisterFile("sgn/wasm/v1beta1/wasmtx.proto", fileDescriptor_1377834962e8d3c5) }

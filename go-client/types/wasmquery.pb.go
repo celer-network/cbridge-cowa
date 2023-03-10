@@ -215,10 +215,10 @@ func (m *QueryBalanceResponse) GetBalance() *types.Coin {
 }
 
 func init() {
-	proto.RegisterType((*QuerySmartContractStateRequest)(nil), "sgn.wasm.v1beta1.QuerySmartContractStateRequest")
-	proto.RegisterType((*QuerySmartContractStateResponse)(nil), "sgn.wasm.v1beta1.QuerySmartContractStateResponse")
-	proto.RegisterType((*QueryBalanceRequest)(nil), "sgn.wasm.v1beta1.QueryBalanceRequest")
-	proto.RegisterType((*QueryBalanceResponse)(nil), "sgn.wasm.v1beta1.QueryBalanceResponse")
+	proto.RegisterType((*QuerySmartContractStateRequest)(nil), "sdk.wasm.v1beta1.QuerySmartContractStateRequest")
+	proto.RegisterType((*QuerySmartContractStateResponse)(nil), "sdk.wasm.v1beta1.QuerySmartContractStateResponse")
+	proto.RegisterType((*QueryBalanceRequest)(nil), "sdk.wasm.v1beta1.QueryBalanceRequest")
+	proto.RegisterType((*QueryBalanceResponse)(nil), "sdk.wasm.v1beta1.QueryBalanceResponse")
 }
 
 func init() { proto.RegisterFile("sgn/wasm/v1beta1/wasmquery.proto", fileDescriptor_7bda2c28ab55ca96) }
