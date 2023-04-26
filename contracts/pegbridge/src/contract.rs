@@ -1,15 +1,16 @@
 #[cfg(not(feature = "library"))]
 use std::ops::Deref;
 use std::str::FromStr;
-use cosmwasm_std::{SubMsgResult, entry_point, Reply, ReplyOn, SubMsg};
+use cosmwasm_std::{SubMsgResult, entry_point, Reply, ReplyOn, SubMsg, BankMsg, coin};
 use cosmwasm_std::{to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, StdError, CosmosMsg, WasmMsg, Uint128, Uint256, CanonicalAddr, from_binary, Storage};
 use cw2::set_contract_version;
+use sei_cosmwasm::SeiMsg;
 use utils::func::keccak256;
 use cw20::{Cw20CoinVerified, Cw20ExecuteMsg};
 use token::msg::Cw20BurnMsg;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, GetConfigResp, BurnMsg, BridgeQueryMsg, MigrateMsg, AllowMsg, NativeToken};
 use crate::pegbridge;
 use crate::state::{State, STATE, OWNER, MINT_IDS, GOVERNOR, PAUSER, DELAYED_TRANSFER, VOLUME_CONTROL, MIN_BURN, MAX_BURN, BURN_IDS, ALLOW_LIST, SUPPLIES};
 
@@ -31,6 +32,7 @@ pub fn instantiate(
     // set state eg. sig_checker, if more cfg is needed, add to InstantiateMsg and State
     let state = State {
         sig_checker: msg.sig_checker.clone(),
+        native_tokens: vec![],
     };
     STATE.save(deps.storage, &state)?;
     // set init owner
@@ -55,7 +57,7 @@ pub fn execute(
     env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     match msg {
         // ONLY owner. set new owner, execute_update_owner checks info.sender equals saved owner
         ExecuteMsg::UpdateOwner { newowner } => Ok(OWNER.update_owner(deps, info, &newowner)?),
@@ -90,6 +92,7 @@ pub fn execute(
 
         ExecuteMsg::Allow(msg) => execute_allow(deps, env, info, msg),
         ExecuteMsg::Burn (msg) => execute_burn(deps, info, env.contract.address, msg),
+        ExecuteMsg::BurnNative(msg) => do_burn_native(deps, info, msg),
         ExecuteMsg::Mint {pbmsg, sigs} => do_mint(deps, env, pbmsg, sigs),
         ExecuteMsg::UpdateMinBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, true),
         ExecuteMsg::UpdateMaxBurn {token_addr, amount} => update_burn_amt_setting(deps, info, token_addr.as_str(), amount, false),
@@ -100,6 +103,9 @@ pub fn execute(
 
         // emit an evnet
         ExecuteMsg::EmitEvent {method, params} => do_emit_event(deps.as_ref(), env, info, method, params),
+
+        ExecuteMsg::UpdateNativeTokens { native_tokens } => update_native_tokens(deps, info, native_tokens),
+        ExecuteMsg::CreateDenom { sub_denom } => create_denom(deps, info, sub_denom),
     }
 }
 
@@ -109,7 +115,7 @@ pub fn do_emit_event(
     info: MessageInfo,
     method: String,
     params: Vec<Binary>
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     if info.sender.ne(&env.contract.address) {
         return Err(ContractError::Std(StdError::generic_err("only called by self")));
     }
@@ -129,13 +135,15 @@ pub fn do_emit_event(
         &_ => {Err(ContractError::Std(StdError::generic_err("unknown event method")))} }
 }
 
-pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> Result<Response, ContractError> {
+pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage.deref())?;
     let id = hex::decode(id_str)?;
     let dt = DELAYED_TRANSFER.execute_delayed_transfer(deps.storage, env.block.time.seconds(), &id)?;
     if let Ok(amount) = u128::from_str(&dt.amount.to_string()) {
-        let msg = _mint(dt.token, dt.receiver, amount)?;
+        let res = Response::new();
+        let state = STATE.load(deps.storage)?;
+        let res = _mint(state.native_tokens, dt.token, dt.receiver, amount, res);
         let sub_msg = SubMsg{
             id: 1,
             msg: CosmosMsg::Wasm(
@@ -151,7 +159,7 @@ pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> R
             gas_limit: Some(100000),
             reply_on: ReplyOn::Always
         };
-        Ok(Response::new().add_message(msg).add_submessage(sub_msg))
+        Ok(res.add_submessage(sub_msg))
     } else {
         Err(ContractError::Std(StdError::generic_err("err when parsing Uint256 into u128.")))
     }
@@ -162,7 +170,7 @@ pub fn do_mint(
     env: Env,
     pbmsg: Binary,
     sigs: Vec<Binary>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage.deref())?;
     let contract_addr = env.contract.address;
@@ -238,30 +246,42 @@ pub fn do_mint(
         res = res.add_submessage(sub_msg)
     } else {
         // mint token
-        let mint_msg: CosmosMsg = _mint(token.clone(), receiver, amount)?;
-        res = res.add_message(mint_msg);
+        res = _mint(state.native_tokens, token.clone(), receiver, amount, res);
     }
     increase_supply(deps.storage, token, amount)?;
     Ok(res)
 }
 
-fn _mint(token: Addr, receiver: Addr, amount: u128) -> StdResult<CosmosMsg> {
-    // cw20 token
-    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: token.into_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Mint {
-            recipient: receiver.into_string(),
-            amount: Uint128::from(amount),
-        })?,
-        funds: vec![],
-    }))
+fn _mint(native_tokens: Vec<NativeToken>, token: Addr, receiver: Addr, amount: u128, res: Response<SeiMsg>) -> Response<SeiMsg> {
+    if let Ok(i) = native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
+        let mint_amount = coin(amount, &native_tokens[i].denom);
+        let mint = sei_cosmwasm::SeiMsg::MintTokens {
+            amount: mint_amount.to_owned(),
+        };
+        let send_msg = SubMsg::new(BankMsg::Send {
+            to_address: receiver.into_string(),
+            amount: vec![mint_amount],
+        });
+        res.add_message(mint).add_submessage(send_msg)
+    } else {
+        // cw20 token
+        let mint = CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: token.into_string(),
+            msg: to_binary(&Cw20ExecuteMsg::Mint {
+                recipient: receiver.into_string(),
+                amount: Uint128::from(amount),
+            }).unwrap(),
+            funds: vec![],
+        });
+        res.add_message(mint)
+    }
 }
 
 pub fn update_sigchecker(
     deps: DepsMut,
     info: MessageInfo,
     newaddr: &str,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by owner
     OWNER.assert_owner(deps.as_ref(), &info)?;
     // make sure newaddr is valid
@@ -282,7 +302,7 @@ pub fn execute_allow(
     _env: Env,
     info: MessageInfo,
     allow: AllowMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by governor
     GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
 
@@ -295,7 +315,7 @@ pub fn execute_allow(
     Ok(res)
 }
 
-pub fn execute_burn(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20BurnMsg) -> Result<Response, ContractError> {
+pub fn execute_burn(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20BurnMsg) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
     let msg: BurnMsg = from_binary(&wrapper.msg)?;
@@ -312,7 +332,7 @@ pub fn do_burn(
     msg: BurnMsg,
     amt: Cw20CoinVerified,
     sender: Addr,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     ALLOW_LIST
         .may_load(deps.storage, &amt.address)?
         .ok_or(ContractError::NotOnAllowList)?;
@@ -363,13 +383,89 @@ pub fn do_burn(
     Ok(res)
 }
 
+pub fn do_burn_native(
+    deps: DepsMut,
+    info: MessageInfo,
+    burn_msg: BurnMsg,
+) -> Result<Response<SeiMsg>, ContractError> {
+    // solidity modifier whenNotPaused
+    PAUSER.when_not_paused(deps.storage)?;
+
+    let tokens = info.funds;
+    if tokens.len() != 1 {
+        return Err(ContractError::Std(StdError::generic_err("one token type per burn only")));
+    }
+
+    let token_denom = &tokens[0].denom;
+    let amount = tokens[0].amount;
+    let user = info.sender.into_string();
+    let state = STATE.load(deps.storage)?;
+    let token: Addr;
+
+    if let Ok(i) = state.native_tokens.binary_search_by_key(token_denom, |n| n.denom.clone()) {
+        token = state.native_tokens[i].mapped_addr.clone();
+    } else {
+        return Err(ContractError::Std(StdError::generic_err("not supported token")));
+    }
+
+    let min = MIN_BURN.may_load(deps.storage, token.clone())?;
+    if let Some(min) = min {
+        if amount.u128() <= min {
+            return Err(ContractError::Std(StdError::generic_err("amount too small")));
+        }
+    }
+    let max = MAX_BURN.may_load(deps.storage, token.clone())?;
+    if let Some(max) = max {
+        if amount.u128() > max {
+            return Err(ContractError::Std(StdError::generic_err("amount too large")));
+        }
+    }
+    decrease_supply(deps.storage, token.clone(), amount.u128())?;
+
+    let token = deps.api.addr_canonicalize(token.as_str()).unwrap(); // sgnd uses canonical addr
+    let burner = deps.api.addr_canonicalize(&user).unwrap(); // sgnd uses canonical addr
+    let to_acnt = hex::decode(burn_msg.to_acnt.trim_start_matches("0x").trim_start_matches("0X")).unwrap();
+    let burn_id = func::keccak256(&abi::encode_packed(
+        &[
+            abi::SolType::Bytes(&burner),
+            abi::SolType::Bytes(&token),
+            abi::SolType::Bytes32(&abi::pad_to_32_bytes(&amount.u128().to_be_bytes())),
+            abi::SolType::Bytes(&burn_msg.to_chid.to_be_bytes()),
+            abi::SolType::Bytes(&to_acnt),
+            abi::SolType::Bytes(&burn_msg.nonce.to_be_bytes()),
+            abi::SolType::Bytes(&abi::CHAIN_ID.to_be_bytes()),
+        ]));
+
+    if BURN_IDS.has(deps.storage, burn_id.clone()) {
+        return Err(ContractError::Std(StdError::generic_err("record exists")));
+    }
+    BURN_IDS.save(deps.storage, burn_id.clone(), &true)?;    
+
+    let mut res = Response::new()
+        .add_attribute("action", "burn")
+        .add_attribute("b_burnid", hex::encode(burn_id)) // calculated burnid
+        .add_attribute("b_token", token.to_string())
+        .add_attribute("b_amount", amount.to_string())
+        .add_attribute("b_burner", burner.to_string())
+        .add_attribute("b_to_chid", burn_msg.to_chid.to_string())
+        .add_attribute("b_to_acnt", burn_msg.to_acnt)
+        .add_attribute("b_nonce", burn_msg.nonce.to_string());
+
+    // Burn the received fund
+    let burn_amount = coin(amount.u128(), token_denom);
+    let burn = sei_cosmwasm::SeiMsg::BurnTokens { amount: burn_amount };
+    res = res.add_message(burn);
+
+    Ok(res)
+}
+
 pub fn update_burn_amt_setting(
     deps: DepsMut,
     info: MessageInfo,
     token_addr: &str,
     amount: u128,
     is_min: bool,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by governor
     GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
     // make sure token is valid
@@ -391,7 +487,7 @@ fn set_supply(
     info: MessageInfo,
     token_addr: &str,
     amount: u128,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     OWNER.assert_owner(deps.as_ref(), &info)?;
     let valid_addr = deps.api.addr_validate(token_addr)?;
     SUPPLIES.save(deps.storage, valid_addr, &amount)?;
@@ -501,6 +597,38 @@ fn query_record(deps: Deps, id_str: String, is_burn: bool) -> StdResult<bool> {
     } else {
         Err(StdError::generic_err("cannot convert id from hex into byte array"))
     }
+}
+
+pub fn create_denom(
+    deps: DepsMut,
+    info: MessageInfo,
+    sub_denom: String,
+) -> Result<Response<SeiMsg>, ContractError> {
+    // must called by owner
+    OWNER.assert_owner(deps.as_ref(), &info)?;
+
+    let create_denom = sei_cosmwasm::SeiMsg::CreateDenom {
+        subdenom: sub_denom,
+    };
+    Ok(Response::new().add_message(create_denom))
+}
+
+pub fn update_native_tokens(
+    deps: DepsMut,
+    info: MessageInfo,
+    native_tokens: Vec<NativeToken>,
+) -> Result<Response<SeiMsg>, ContractError> {
+    // must called by owner
+    OWNER.assert_owner(deps.as_ref(), &info)?;
+    
+    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+        state.native_tokens = native_tokens.clone();
+        Ok(state)
+    })?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_native_tokens")
+        .add_attribute("native_tokens", serde_json_wasm::to_string(&native_tokens).unwrap()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]

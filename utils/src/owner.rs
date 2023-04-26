@@ -1,3 +1,4 @@
+use sei_cosmwasm::SeiMsg;
 use thiserror::Error;
 
 use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage};
@@ -66,7 +67,7 @@ impl<'a> Owner<'a> {
         deps: DepsMut,
         info: MessageInfo,
         new_owner: &str,
-    ) -> Result<Response, OwnerError> {
+    ) -> Result<Response<SeiMsg>, OwnerError> {
         // make sure caller is current owner
         self.assert_owner(deps.as_ref(), &info)?;
 

@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use sei_cosmwasm::SeiMsg;
 use thiserror::Error;
 
 use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage};
@@ -35,7 +36,7 @@ impl<'a> Governor<'a> {
     }
 
     /// as constructor in solidity, can only be called once
-    pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response, GovernorError> {
+    pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response<SeiMsg>, GovernorError> {
         // make sure Owner has already been set.
         self.owner.only_owner(store.deref(),caller)?;
         self.add_governor(store, caller)
@@ -46,7 +47,7 @@ impl<'a> Governor<'a> {
         self.governors.has(store, candidat)
     }
 
-    fn add_governor(&self, store: &mut dyn Storage, new_governor: &Addr) -> Result<Response, GovernorError> {
+    fn add_governor(&self, store: &mut dyn Storage, new_governor: &Addr) -> Result<Response<SeiMsg>, GovernorError> {
         if self.is_governor(store.deref(), new_governor) {
             return Err(GovernorError::AlreadyGovernor {});
         }
@@ -54,7 +55,7 @@ impl<'a> Governor<'a> {
         Ok(Response::new().add_attribute("new_governor", new_governor))
     }
 
-    fn remove_governor(&self, store: &mut dyn Storage, removed_governor: &Addr) -> Result<Response, GovernorError> {
+    fn remove_governor(&self, store: &mut dyn Storage, removed_governor: &Addr) -> Result<Response<SeiMsg>, GovernorError> {
         if !self.is_governor(store.deref(), removed_governor) {
             return Err(GovernorError::NotGovernor {});
         }
@@ -81,21 +82,21 @@ impl<'a> Governor<'a> {
 
     //execute
     /// add a governor, can only be called by owner
-    pub fn execute_add_governor(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, GovernorError> {
+    pub fn execute_add_governor(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response<SeiMsg>, GovernorError> {
         let governor = deps.api.addr_validate(&address)?;
         self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.add_governor(deps.storage, &governor)
     }
 
     /// remove a governor, can only be called by owner
-    pub fn execute_remove_governor(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, GovernorError> {
+    pub fn execute_remove_governor(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response<SeiMsg>, GovernorError> {
         let governor = deps.api.addr_validate(&address)?;
         self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.remove_governor(deps.storage, &governor)
     }
 
     /// renounce governor, can be called by any governor
-    pub fn execute_renounce_governor(&self, deps: DepsMut, info: MessageInfo) -> Result<Response, GovernorError> {
+    pub fn execute_renounce_governor(&self, deps: DepsMut, info: MessageInfo) -> Result<Response<SeiMsg>, GovernorError> {
         self.remove_governor(deps.storage, &info.sender)
     }
 

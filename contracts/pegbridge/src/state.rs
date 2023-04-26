@@ -11,10 +11,12 @@ use utils::delayed_transfer::DelayedTransfer;
 use utils::governor::Governor;
 use utils::pauser::Pauser;
 use utils::volume_control::VolumeControl;
+use crate::msg::NativeToken;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub sig_checker: Addr, // contract address that validates sigs
+    pub native_tokens: Vec<NativeToken>,
 }
 
 pub const STATE: Item<State> = Item::new("state");

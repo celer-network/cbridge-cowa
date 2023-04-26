@@ -1,4 +1,5 @@
 use std::ops::{Deref, Div, Mul};
+use sei_cosmwasm::SeiMsg;
 use thiserror::Error;
 
 use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage, Uint256};
@@ -134,7 +135,7 @@ impl<'a> VolumeControl<'a> {
 
     //execute
     /// set epoch volume caps
-    pub fn execute_set_epoch_volume_caps(&self, deps: DepsMut, info: MessageInfo, tokens: Vec<String>, caps: Vec<Uint256>) -> Result<Response, VolumeControlError> {
+    pub fn execute_set_epoch_volume_caps(&self, deps: DepsMut, info: MessageInfo, tokens: Vec<String>, caps: Vec<Uint256>) -> Result<Response<SeiMsg>, VolumeControlError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
         if tokens.len() != caps.len() {
             return Err(VolumeControlError::InvalidInputs {})
@@ -149,7 +150,7 @@ impl<'a> VolumeControl<'a> {
     }
 
     /// set epoch length
-    pub fn execute_set_epoch_length(&self, deps: DepsMut, info: MessageInfo, length: u64) -> Result<Response, VolumeControlError> {
+    pub fn execute_set_epoch_length(&self, deps: DepsMut, info: MessageInfo, length: u64) -> Result<Response<SeiMsg>, VolumeControlError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
         self.epoch_length.save(deps.storage, &length)?;
         Ok(Response::new().add_attribute("action", "set_epoch_length")

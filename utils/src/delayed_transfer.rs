@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use sei_cosmwasm::SeiMsg;
 use thiserror::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -113,7 +114,7 @@ impl<'a> DelayedTransfer<'a> {
     }
 
     // emit an event of adding a delayed transfer
-    pub fn emit_delayed_transfer_added(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response, DelayedTransferError> {
+    pub fn emit_delayed_transfer_added(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response<SeiMsg>, DelayedTransferError> {
         if !self.delayed_transfers.has(store, id.to_vec()) {
             Err(DelayedTransferError::NotExist {})
         } else {
@@ -123,7 +124,7 @@ impl<'a> DelayedTransfer<'a> {
     }
 
     // emit an event of executing a delayed transfer
-    pub fn emit_delayed_transfer_executed(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response, DelayedTransferError> {
+    pub fn emit_delayed_transfer_executed(&self, store: &dyn Storage, id: &Vec<u8>) -> Result<Response<SeiMsg>, DelayedTransferError> {
         if self.delayed_transfers.has(store, id.to_vec()) {
             Err(DelayedTransferError::Existed {})
         } else {
@@ -157,7 +158,7 @@ impl<'a> DelayedTransfer<'a> {
 
     //execute
     /// set delay thresholds
-    pub fn execute_set_delay_thresholds(&self, deps: DepsMut, info: MessageInfo, tokens: Vec<String>, thresholds: Vec<Uint256>) -> Result<Response, DelayedTransferError> {
+    pub fn execute_set_delay_thresholds(&self, deps: DepsMut, info: MessageInfo, tokens: Vec<String>, thresholds: Vec<Uint256>) -> Result<Response<SeiMsg>, DelayedTransferError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
         if tokens.len() != thresholds.len() {
             return Err(DelayedTransferError::InvalidInputs {})
@@ -172,7 +173,7 @@ impl<'a> DelayedTransfer<'a> {
     }
 
     /// set delay period
-    pub fn execute_set_delay_period(&self, deps: DepsMut, info: MessageInfo, period: u64) -> Result<Response, DelayedTransferError> {
+    pub fn execute_set_delay_period(&self, deps: DepsMut, info: MessageInfo, period: u64) -> Result<Response<SeiMsg>, DelayedTransferError> {
         self.governor.only_governor(deps.storage.deref(), &info.sender)?;
         self.delay_period.save(deps.storage, &period)?;
         Ok(Response::new().add_attribute("action", "set_delay_period")

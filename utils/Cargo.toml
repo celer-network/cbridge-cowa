@@ -20,6 +20,7 @@ thiserror = { version = "1.0.26" }
 hex = "0.4"
 hex-literal = "0.3"
 sha3 = "0.10.1"
+sei-cosmwasm = { version = "0.4.10" }
 
 [dev-dependencies]
 cosmwasm-schema = { version = "1.0.0" }

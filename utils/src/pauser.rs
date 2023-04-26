@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use sei_cosmwasm::SeiMsg;
 use thiserror::Error;
 
 use cosmwasm_std::{Addr, Deps, DepsMut, MessageInfo, Response, StdError, StdResult, Storage};
@@ -43,7 +44,7 @@ impl<'a> Pauser<'a> {
     }
 
     /// as constructor in solidity, can only be called once
-    pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response, PauserError> {
+    pub fn instantiate(&self, store: &mut dyn Storage, caller: &Addr) -> Result<Response<SeiMsg>, PauserError> {
         // make sure Owner has already been set.
         self.owner.only_owner(store.deref(),caller)?;
         self.paused.save(store, &false)?;
@@ -55,7 +56,7 @@ impl<'a> Pauser<'a> {
         self.paused.load(store)
     }
 
-    fn add_pauser(&self, store: &mut dyn Storage, new_pauser: &Addr) -> Result<Response, PauserError> {
+    fn add_pauser(&self, store: &mut dyn Storage, new_pauser: &Addr) -> Result<Response<SeiMsg>, PauserError> {
         if self.is_pauser(store.deref(), new_pauser) {
             return Err(PauserError::AlreadyPauser {});
         }
@@ -63,7 +64,7 @@ impl<'a> Pauser<'a> {
         Ok(Response::new().add_attribute("new_pauser", new_pauser))
     }
 
-    fn remove_pauser(&self, store: &mut dyn Storage, removed_pauser: &Addr) -> Result<Response, PauserError> {
+    fn remove_pauser(&self, store: &mut dyn Storage, removed_pauser: &Addr) -> Result<Response<SeiMsg>, PauserError> {
         if !self.is_pauser(store.deref(), removed_pauser) {
             return Err(PauserError::NotPauser {});
         }
@@ -118,7 +119,7 @@ impl<'a> Pauser<'a> {
 
     //execute
     /// pause this contract
-    pub fn execute_pause(&self, deps: DepsMut, info: MessageInfo) -> Result<Response, PauserError> {
+    pub fn execute_pause(&self, deps: DepsMut, info: MessageInfo) -> Result<Response<SeiMsg>, PauserError> {
         let store= deps.storage;
         self.when_not_paused(store.deref())?;
         self.only_pauser(store.deref(), &info.sender)?;
@@ -127,7 +128,7 @@ impl<'a> Pauser<'a> {
     }
 
     /// unpause this contract
-    pub fn execute_unpause(&self, deps: DepsMut, info: MessageInfo) -> Result<Response, PauserError> {
+    pub fn execute_unpause(&self, deps: DepsMut, info: MessageInfo) -> Result<Response<SeiMsg>, PauserError> {
         let store = deps.storage;
         self.when_paused(store.deref())?;
         self.only_pauser(store.deref(), &info.sender)?;
@@ -136,21 +137,21 @@ impl<'a> Pauser<'a> {
     }
 
     /// add a pauser, can only be called by owner
-    pub fn execute_add_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, PauserError> {
+    pub fn execute_add_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response<SeiMsg>, PauserError> {
         let pauser = deps.api.addr_validate(&address)?;
         self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.add_pauser(deps.storage, &pauser)
     }
 
     /// remove a pauser, can only be called by owner
-    pub fn execute_remove_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response, PauserError> {
+    pub fn execute_remove_pauser(&self, deps: DepsMut, info: MessageInfo, address: String) -> Result<Response<SeiMsg>, PauserError> {
         let pauser = deps.api.addr_validate(&address)?;
         self.owner.only_owner(deps.storage.deref(), &info.sender)?;
         self.remove_pauser(deps.storage, &pauser)
     }
 
     /// renounce pauser, can be called by any pauser
-    pub fn execute_renounce_pauser(&self, deps: DepsMut, info: MessageInfo) -> Result<Response, PauserError> {
+    pub fn execute_renounce_pauser(&self, deps: DepsMut, info: MessageInfo) -> Result<Response<SeiMsg>, PauserError> {
         self.remove_pauser(deps.storage, &info.sender)
     }
 

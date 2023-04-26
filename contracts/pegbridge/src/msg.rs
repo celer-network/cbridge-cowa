@@ -65,6 +65,7 @@ pub enum ExecuteMsg {
     Allow(AllowMsg),
     /// called by a CW20 based test token
     Burn ( Cw20BurnMsg ),
+    BurnNative(BurnMsg),
     UpdateMinBurn{ token_addr: String, amount: u128 },
     UpdateMaxBurn{ token_addr: String, amount: u128 },
     SetSupply{ token_addr: String, amount: u128 },
@@ -74,6 +75,9 @@ pub enum ExecuteMsg {
         method: String,
         params: Vec<Binary>,
     },
+
+    CreateDenom {sub_denom: String},
+    UpdateNativeTokens { native_tokens: Vec<NativeToken> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -157,4 +161,11 @@ pub enum BridgeQueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct NativeToken {
+    pub denom: String,
+    pub mapped_addr: Addr,
 }

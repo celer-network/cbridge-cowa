@@ -7,6 +7,7 @@ use cosmwasm_std::{from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, Mes
 use cw2::set_contract_version;
 
 use cw20::{Cw20ReceiveMsg, Cw20ExecuteMsg, Cw20CoinVerified};
+use sei_cosmwasm::SeiMsg;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, DepositMsg, GetConfigResp, NativeToken, BridgeQueryMsg, MigrateMsg};
@@ -57,7 +58,7 @@ pub fn execute(
     env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     match msg {
         // ONLY owner. set new owner, execute_update_owner checks info.sender equals saved owner
         ExecuteMsg::UpdateOwner { new_owner } => Ok(OWNER.update_owner(deps, info, &new_owner)?),
@@ -90,8 +91,6 @@ pub fn execute(
         // ONLY governor. set epoch length.
         ExecuteMsg::SetEpochLength {length} => Ok(VOLUME_CONTROL.execute_set_epoch_length(deps, info, length)?),
 
-
-
         ExecuteMsg::UpdateMinDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, true),
         ExecuteMsg::UpdateMaxDeposit { token_addr, amount } => update_deposit_amt_setting(deps, info, &token_addr, amount, false),
 
@@ -122,7 +121,7 @@ pub fn do_emit_event(
     info: MessageInfo,
     method: String,
     params: Vec<Binary>
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     if info.sender.ne(&env.contract.address) {
         return Err(ContractError::Std(StdError::generic_err("only called by self")));
     }
@@ -142,7 +141,7 @@ pub fn do_emit_event(
         &_ => {Err(ContractError::Std(StdError::generic_err("unknown event method")))} }
 }
 
-pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> Result<Response, ContractError> {
+pub fn do_execute_delayed_transfer(deps: DepsMut, env: Env, id_str: String) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage.deref())?;
     let id = hex::decode(id_str)?;
@@ -171,7 +170,7 @@ pub fn do_withdraw(
     env: Env,
     pbmsg: Binary,
     sigs: Vec<Binary>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
     let contract_addr = env.contract.address;
@@ -243,14 +242,14 @@ pub fn do_withdraw(
         )
     } else {
         // send token
-        let send_token_msg: CosmosMsg = _send_token(state.native_tokens, token, receiver, amount)?;
+        let send_token_msg = _send_token(state.native_tokens, token, receiver, amount)?;
         res = res.add_message(send_token_msg);
     }
 
     Ok(res)
 }
 
-fn _send_token(native_tokens: Vec<NativeToken>, token: Addr, receiver: Addr, amount: u128) -> StdResult<CosmosMsg> {
+fn _send_token(native_tokens: Vec<NativeToken>, token: Addr, receiver: Addr, amount: u128) -> StdResult<CosmosMsg<SeiMsg>> {
     if let Ok(i) = native_tokens.binary_search_by_key(&token, |n| n.mapped_addr.clone()) {
         // native token
         Ok(CosmosMsg::Bank(BankMsg::Send {
@@ -274,7 +273,7 @@ pub fn update_sigchecker(
     deps: DepsMut,
     info: MessageInfo,
     newaddr: &str,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by owner
     OWNER.assert_owner(deps.as_ref(), &info)?;
     // make sure newaddr is valid
@@ -295,7 +294,7 @@ pub fn update_deposit_amt_setting(
     token_addr: &str,
     amount: u128,
     is_min: bool,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by governor
     GOVERNOR.only_governor(deps.storage.deref(), &info.sender)?;
     // make sure token is valid
@@ -316,7 +315,7 @@ pub fn update_native_tokens(
     deps: DepsMut,
     info: MessageInfo,
     native_tokens: Vec<NativeToken>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // must called by owner
     OWNER.assert_owner(deps.as_ref(), &info)?;
     
@@ -330,7 +329,7 @@ pub fn update_native_tokens(
         .add_attribute("native_tokens", serde_json_wasm::to_string(&native_tokens).unwrap()))
 }
 
-pub fn execute_deposit(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20ReceiveMsg) -> Result<Response, ContractError> {
+pub fn execute_deposit(deps: DepsMut, info: MessageInfo, _this: Addr, wrapper: Cw20ReceiveMsg) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
     let msg: DepositMsg = from_binary(&wrapper.msg)?;
@@ -347,7 +346,7 @@ pub fn do_deposit(
     msg: DepositMsg,
     amt: Cw20CoinVerified,
     sender: Addr,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     let token = amt.address; // cw20 contract Addr
     let amount = amt.amount; // Uint128 amount
 
@@ -397,7 +396,7 @@ pub fn do_deposit_native(
     deps: DepsMut,
     info: MessageInfo,
     dep_msg: DepositMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<SeiMsg>, ContractError> {
     // solidity modifier whenNotPaused
     PAUSER.when_not_paused(deps.storage)?;
 
