@@ -4,6 +4,7 @@ use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response,
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
+use cw20_base::ContractError as CW20ContractError;
 use crate::msg::{Cw20BurnMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::state::{BRIDGE, OWNER};
 
@@ -12,10 +13,23 @@ use cw20_base::{
         execute_mint,
         execute_send,
         execute_transfer,
+        execute_update_marketing,
+        execute_upload_logo,
+        execute_update_minter,
         query_balance,
         query_minter,
         query_token_info,
+        query_marketing_info,
+        query_download_logo,
     },
+
+    allowances::{
+        execute_burn_from, execute_decrease_allowance, execute_increase_allowance, execute_send_from,
+        execute_transfer_from, query_allowance,
+    },
+
+    enumerable::{query_all_accounts, query_owner_allowances, query_spender_allowances},
+
     state::{
         MinterData,
         TokenInfo,
@@ -65,16 +79,54 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Mint {recipient, amount} => Ok(execute_mint(deps, _env, info, recipient, amount)?),
-        ExecuteMsg::Burn {amount, msg } => execute_burn(deps, _env, info, amount, msg),
-        ExecuteMsg::Send {contract, amount, msg} => Ok(execute_send(deps, _env, info, contract, amount, msg)?),
-        ExecuteMsg::Transfer {recipient, amount} => Ok(execute_transfer(deps, _env, info, recipient, amount)?),
+        ExecuteMsg::Mint {recipient, amount} => Ok(execute_mint(deps, env, info, recipient, amount)?),
+        ExecuteMsg::Burn {amount, msg } => execute_burn(deps, env, info, amount, msg),
+        ExecuteMsg::Send {contract, amount, msg} => Ok(execute_send(deps, env, info, contract, amount, msg)?),
+        ExecuteMsg::Transfer {recipient, amount} => Ok(execute_transfer(deps, env, info, recipient, amount)?),
         ExecuteMsg::UpdateBridge {bridge} => execute_update_bridge(deps, info, bridge),
+        ExecuteMsg::IncreaseAllowance {
+            spender,
+            amount,
+            expires,
+        } => convert(execute_increase_allowance(deps, env, info, spender, amount, expires)),
+        ExecuteMsg::DecreaseAllowance {
+            spender,
+            amount,
+            expires,
+        } => convert(execute_decrease_allowance(deps, env, info, spender, amount, expires)),
+        ExecuteMsg::TransferFrom {
+            owner,
+            recipient,
+            amount,
+        } => convert(execute_transfer_from(deps, env, info, owner, recipient, amount)),
+        ExecuteMsg::BurnFrom { owner, amount } => convert(execute_burn_from(deps, env, info, owner, amount)),
+        ExecuteMsg::SendFrom {
+            owner,
+            contract,
+            amount,
+            msg,
+        } => convert(execute_send_from(deps, env, info, owner, contract, amount, msg)),
+        ExecuteMsg::UpdateMarketing {
+            project,
+            description,
+            marketing,
+        } => convert(execute_update_marketing(deps, env, info, project, description, marketing)),
+        ExecuteMsg::UploadLogo(logo) => convert(execute_upload_logo(deps, env, info, logo)),
+        ExecuteMsg::UpdateMinter { new_minter } => {
+            convert(execute_update_minter(deps, env, info, new_minter))
+        }
+    }
+}
+
+fn convert(r: Result<Response, CW20ContractError>) -> Result<Response, ContractError> {
+    match r {
+        Ok(x) => Ok(x),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -141,6 +193,29 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Minter {} => to_binary(&query_minter(deps)?),
         QueryMsg::Owner {} => to_binary(&OWNER.get(deps)?),
         QueryMsg::TokenInfo {} => to_binary(&query_token_info(deps)?),
+        QueryMsg::Allowance { owner, spender } => {
+            to_binary(&query_allowance(deps, owner, spender)?)
+        }
+        QueryMsg::AllAllowances {
+            owner,
+            start_after,
+            limit,
+        } => to_binary(&query_owner_allowances(deps, owner, start_after, limit)?),
+        QueryMsg::AllSpenderAllowances {
+            spender,
+            start_after,
+            limit,
+        } => to_binary(&query_spender_allowances(
+            deps,
+            spender,
+            start_after,
+            limit,
+        )?),
+        QueryMsg::AllAccounts { start_after, limit } => {
+            to_binary(&query_all_accounts(deps, start_after, limit)?)
+        }
+        QueryMsg::MarketingInfo {} => to_binary(&query_marketing_info(deps)?),
+        QueryMsg::DownloadLogo {} => to_binary(&query_download_logo(deps)?),
     }
 }
 

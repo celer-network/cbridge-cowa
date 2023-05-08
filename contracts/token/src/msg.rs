@@ -1,6 +1,8 @@
 use cosmwasm_std::{Addr, CosmosMsg, StdResult, to_binary, Binary, Uint128, WasmMsg};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use cw20::Logo;
+use cw_utils::Expiration;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -29,6 +31,53 @@ pub enum ExecuteMsg {
     },
     /// Update bridge address
     UpdateBridge { bridge: String },
+    IncreaseAllowance {
+        spender: String,
+        amount: Uint128,
+        expires: Option<Expiration>,
+    },
+    /// Only with "approval" extension. Lowers the spender's access of tokens
+    /// from the owner's (env.sender) account by amount. If expires is Some(), overwrites current
+    /// allowance expiration with this one.
+    DecreaseAllowance {
+        spender: String,
+        amount: Uint128,
+        expires: Option<Expiration>,
+    },
+    /// Only with "approval" extension. Transfers amount tokens from owner -> recipient
+    /// if `env.sender` has sufficient pre-approval.
+    TransferFrom {
+        owner: String,
+        recipient: String,
+        amount: Uint128,
+    },
+    /// Only with "approval" extension. Sends amount tokens from owner -> contract
+    /// if `env.sender` has sufficient pre-approval.
+    SendFrom {
+        owner: String,
+        contract: String,
+        amount: Uint128,
+        msg: Binary,
+    },
+    /// Only with "approval" extension. Destroys tokens forever
+    BurnFrom { owner: String, amount: Uint128 },
+    /// Only with the "mintable" extension. The current minter may set
+    /// a new minter. Setting the minter to None will remove the
+    /// token's minter forever.
+    UpdateMinter { new_minter: Option<String> },
+    /// Only with the "marketing" extension. If authorized, updates marketing metadata.
+    /// Setting None/null for any of these will leave it unchanged.
+    /// Setting Some("") will clear this field on the contract storage
+    UpdateMarketing {
+        /// A URL pointing to the project behind this token.
+        project: Option<String>,
+        /// A longer description of the token and it's utility. Designed for tooltips or such
+        description: Option<String>,
+        /// The address (if any) who can update this data structure
+        marketing: Option<String>,
+    },
+    /// If set as the "marketing" role on the contract, upload a new URL, SVG, or PNG for the token
+    UploadLogo(Logo),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -40,6 +89,23 @@ pub enum QueryMsg {
     Minter {},
     Owner {},
     TokenInfo {},
+    Allowance { owner: String, spender: String },
+    AllAllowances {
+        owner: String,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    AllSpenderAllowances {
+        spender: String,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    AllAccounts {
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    MarketingInfo {},
+    DownloadLogo {},
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
