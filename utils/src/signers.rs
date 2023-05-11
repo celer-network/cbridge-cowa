@@ -186,9 +186,14 @@ impl<'a> Signers<'a> {
         let sigs: Vec<&[u8]> = sigs_vec.iter().map(
             |s| s.as_slice()
         ).collect();
+        let mut counted: HashMap<CanonicalAddr, bool> = HashMap::new();
         for sig in sigs {
             let signer = func::recover_signer(deps, &eth_msg, sig)?;
+            if let Some(_) = counted.get(&signer) {
+                continue;
+            }
             if let Some(power) = signer_powers.get(&signer) {
+                counted.insert(signer.clone(), true);
                 signed_power = signed_power.add(power);
                 if signed_power >= quorum {
                     return Ok(Response::new());
